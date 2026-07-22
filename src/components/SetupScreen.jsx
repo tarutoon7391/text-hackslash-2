@@ -10,7 +10,7 @@ import { SAMPLE_WEAPONS } from '../data/sampleWeapons.js'
 import { ALL_SKILLS_BY_ID } from '../data/skills_elemental.js'
 import SkillDetailPopup from './battle/SkillDetailPopup.jsx'
 
-export default function SetupScreen({ onStart }) {
+export default function SetupScreen({ onStart, onOpenDictionary }) {
   const [jobId, setJobId] = useState('swordsman')
   const [weaponId, setWeaponId] = useState(null)
   const [enemyId, setEnemyId] = useState('goblin')
@@ -41,6 +41,9 @@ export default function SetupScreen({ onStart }) {
     <div className="setup">
       <h1 className="setup-title">⚔️ text-hackslash-2</h1>
       <p className="setup-sub">フェーズ1：ソロ戦闘テスト</p>
+
+      {/* 用語辞典への導線 */}
+      <button className="dict-link" onClick={onOpenDictionary}>📖 用語辞典</button>
 
       <h2 className="section-label">職業</h2>
       <div className="job-grid">
@@ -142,6 +145,7 @@ export default function SetupScreen({ onStart }) {
           skill={popupSkill.skill}
           displayName={popupSkill.plus > 0 ? `${popupSkill.skill.name}(+${popupSkill.plus})` : popupSkill.skill.name}
           onClose={() => setPopupSkill(null)}
+          onOpenDictionary={onOpenDictionary}
         />
       )}
     </div>

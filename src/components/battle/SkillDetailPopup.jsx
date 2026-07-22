@@ -9,7 +9,7 @@ import { GLOSSARY_BY_TERM } from '../../data/glossary.js'
 import { renderGlossaryText } from '../../utils/glossaryText.js'
 import GlossarySummaryPopup from '../common/GlossarySummaryPopup.jsx'
 
-export default function SkillDetailPopup({ skill, displayName, mpCost, usable = true, onUse, onClose }) {
+export default function SkillDetailPopup({ skill, displayName, mpCost, usable = true, onUse, onClose, onOpenDictionary }) {
   // まとめ用語ポップアップ（このコンポーネント内で管理するので、
   // SkillDetailPopup自体が閉じられたら一緒に閉じる）
   const [glossTerms, setGlossTerms] = useState(null)
@@ -23,12 +23,12 @@ export default function SkillDetailPopup({ skill, displayName, mpCost, usable = 
         <div className="popup-stars">{'★'.repeat(skill.star)}</div>
         <div className="popup-name">{displayName || skill.name}</div>
         <div className="popup-meta">
-          {/* 属性ラベルもタップで用語詳細を開ける（その属性名1つだけを表示） */}
+          {/* 属性ラベルもタップで用語詳細を開ける（「無属性」も含めて属性名1つだけを表示） */}
           <span
             className={`elem-tag ${elemClass}`}
             onClick={() => {
-              if (!skill.element) return
-              const entry = GLOSSARY_BY_TERM[ELEMENTS[skill.element].name]
+              const termName = skill.element ? ELEMENTS[skill.element].name : '無属性'
+              const entry = GLOSSARY_BY_TERM[termName]
               if (entry) setGlossTerms([entry])
             }}
           >
@@ -44,7 +44,11 @@ export default function SkillDetailPopup({ skill, displayName, mpCost, usable = 
 
       {/* まとめ用語ポップアップ（z-indexでこのポップアップより上に重ねる） */}
       {glossTerms && (
-        <GlossarySummaryPopup terms={glossTerms} onClose={() => setGlossTerms(null)} />
+        <GlossarySummaryPopup
+          terms={glossTerms}
+          onClose={() => setGlossTerms(null)}
+          onOpenDictionary={onOpenDictionary}
+        />
       )}
     </div>
   )

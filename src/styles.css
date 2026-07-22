@@ -427,6 +427,66 @@ button:disabled { opacity: 0.4; cursor: default; }
 }
 .gloss-item p { font-size: 11px; color: var(--text); line-height: 1.6; }
 
+/* ===== 用語辞典画面（最前面オーバーレイ。元の画面の状態は保持される） ===== */
+.dict-screen {
+  position: fixed;
+  inset: 0;
+  background: var(--bg);
+  z-index: 50; /* 用語ポップアップ(z:40)より上の最前面 */
+  max-width: 480px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left);
+}
+.dict-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+}
+.dict-back {
+  background: var(--panel2);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 0 14px;
+  font-size: 13px;
+}
+.dict-title { font-size: 16px; }
+.dict-body {
+  flex: 1;
+  overflow-y: auto; /* 一覧性が必要なコンテンツのためスクロール可（スクロール最小主義の例外） */
+  padding: 12px 12px calc(20px + env(safe-area-inset-bottom));
+}
+.dict-section { margin-bottom: 16px; }
+.dict-category {
+  font-size: 13px;
+  color: var(--accent);
+  border-left: 3px solid var(--accent);
+  padding-left: 8px;
+  margin-bottom: 8px;
+}
+.dict-section .gloss-item {
+  background: var(--panel);
+  border-radius: 10px;
+  padding: 10px;
+  margin-bottom: 6px;
+}
+
+/* ロビーの用語辞典リンク */
+.dict-link {
+  display: block;
+  width: 100%;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  font-size: 13px;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+
 /* 通知トースト */
 .toast {
   position: fixed;

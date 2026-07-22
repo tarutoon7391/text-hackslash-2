@@ -63,7 +63,7 @@ function EffectIcons({ combatant }) {
   return <div className="effect-row">{items}</div>
 }
 
-export default function BattleScreen({ battle, setBattle, onExit }) {
+export default function BattleScreen({ battle, setBattle, onExit, onOpenDictionary }) {
   const [showLog, setShowLog] = useState(false)
   const [uiMode, setUiMode] = useState('menu')          // 'menu' | 'skillList'
   const [selectedSkillId, setSelectedSkillId] = useState(null) // 白枠選択中のスキル
@@ -366,6 +366,7 @@ export default function BattleScreen({ battle, setBattle, onExit }) {
           usable={popupEntry.usable && !busy}
           onUse={() => onUseSkill(popupEntry)}
           onClose={() => setPopupEntry(null)}
+          onOpenDictionary={onOpenDictionary}
         />
       )}
 
@@ -397,7 +398,11 @@ export default function BattleScreen({ battle, setBattle, onExit }) {
 
       {/* まとめ用語ポップアップ（スキル一覧の色付き用語タップで開く） */}
       {glossTerms && (
-        <GlossarySummaryPopup terms={glossTerms} onClose={() => setGlossTerms(null)} />
+        <GlossarySummaryPopup
+          terms={glossTerms}
+          onClose={() => setGlossTerms(null)}
+          onOpenDictionary={onOpenDictionary}
+        />
       )}
 
       {/* ログ履歴ボトムシート */}

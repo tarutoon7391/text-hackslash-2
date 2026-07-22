@@ -32,6 +32,8 @@ export const GLOSSARY = [
     description: '状態異常の解除・耐性サポートが得意な属性。闇属性との間でお互いに1.5倍のダメージを与え合う。' },
   { term: '闇', category: '属性', color: ELEMENT_COLORS.dark,
     description: '状態異常「呪い」と結びつく属性。光属性との間でお互いに1.5倍のダメージを与え合う。' },
+  { term: '無属性', category: '属性', color: ELEMENT_COLORS.none,
+    description: 'いずれの属性にも該当しないこと。属性相性によるダメージ倍率・軽減の対象にならない。' },
 
   // ===== 状態異常 =====
   { term: '火傷', category: '状態異常', color: ELEMENT_COLORS.fire,
