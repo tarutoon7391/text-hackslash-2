@@ -1,10 +1,21 @@
 // スキル詳細ポップアップ（星の数・属性色分け・MP消費・効果テキスト）
 // 画面遷移せず現在の画面内にオーバーレイ表示する小さなポップアップ
 // onUseを渡すと「使う」ボタンが付く（戦闘中のスキル選択フロー用）
+// 効果テキスト内の用語は色付き表示され、タップするとまとめ用語ポップアップが
+// このポップアップより上のレイヤーに重なって開く（閉じてもこちらは維持される）
+import { useState } from 'react'
 import { ELEMENTS } from '../../data/elements.js'
+import { renderGlossaryText } from '../../utils/glossaryText.js'
+import GlossarySummaryPopup from '../common/GlossarySummaryPopup.jsx'
 
 export default function SkillDetailPopup({ skill, displayName, mpCost, usable = true, onUse, onClose }) {
+  // まとめ用語ポップアップ（このコンポーネント内で管理するので、
+  // SkillDetailPopup自体が閉じられたら一緒に閉じる）
+  const [glossTerms, setGlossTerms] = useState(null)
+
   const elemClass = skill.element ? `elem-${skill.element}` : 'elem-none'
+  const { nodes: descNodes } = renderGlossaryText(skill.desc, (terms) => setGlossTerms(terms))
+
   return (
     <div className="popup-overlay" onClick={onClose}>
       <div className={`skill-popup ${elemClass}`} onClick={(ev) => ev.stopPropagation()}>
@@ -16,11 +27,16 @@ export default function SkillDetailPopup({ skill, displayName, mpCost, usable = 
           </span>
           <span className="popup-mp">MP {mpCost ?? skill.mp}</span>
         </div>
-        <div className="popup-desc">{skill.desc}</div>
+        <div className="popup-desc">{descNodes}</div>
         {onUse && (
           <button className="use-btn" disabled={!usable} onClick={onUse}>使う</button>
         )}
       </div>
+
+      {/* まとめ用語ポップアップ（z-indexでこのポップアップより上に重ねる） */}
+      {glossTerms && (
+        <GlossarySummaryPopup terms={glossTerms} onClose={() => setGlossTerms(null)} />
+      )}
     </div>
   )
 }

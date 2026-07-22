@@ -133,6 +133,7 @@ export function createBattle({ jobId, weapon, enemyId, seed = null }) {
     result: null,   // null | 'win' | 'lose'
     rng,
     log: [],
+    uiEvents: [], // UI演出用イベント（状態異常の付与/発動など）。UI側がsplice(0)で取り出す
     _queue: [],
     player: {
       id: 'player',
@@ -175,6 +176,12 @@ export function createBattle({ jobId, weapon, enemyId, seed = null }) {
 
 function addLog(battle, text, kind = 'info') {
   battle.log.push({ turn: battle.turn, text, kind })
+}
+
+// UI演出用イベントの通知（数値計算には一切影響しない）
+// type: 'ailmentApplied'（付与・悪化）| 'ailmentTriggered'（不利益の発動）
+function pushEvent(battle, event) {
+  if (battle.uiEvents) battle.uiEvents.push(event)
 }
 
 function opponentOf(battle, combatant) {
@@ -373,6 +380,7 @@ function performAction(battle, actor, action) {
   const freeze = actor.ailments.find((a) => a.id === 'freeze')
   if (freeze) {
     addLog(battle, `🧊 ${actor.name} は凍結していて動けない！`, 'ailment')
+    pushEvent(battle, { type: 'ailmentTriggered', target: actor.id, ailment: 'freeze' })
     actor.actedThisTurn = true
     return
   }
@@ -382,6 +390,7 @@ function performAction(battle, actor, action) {
     const failRate = Math.min(p.failRateCap, p.failRatePerStack * shock.stacks)
     if (battle.rng() < failRate) {
       addLog(battle, `⚡ ${actor.name} は感電して行動に失敗した！`, 'ailment')
+      pushEvent(battle, { type: 'ailmentTriggered', target: actor.id, ailment: 'shock' })
       actor.actedThisTurn = true
       return
     }
@@ -395,6 +404,7 @@ function performAction(battle, actor, action) {
       const dmg = Math.max(1, Math.round(getEffStat(actor, 'atk') * p.selfHitPowerRatio))
       applyDamage(battle, actor, dmg)
       addLog(battle, `💫 ${actor.name} は混乱して自分を攻撃！ ${dmg}ダメージ`, 'ailment')
+      pushEvent(battle, { type: 'ailmentTriggered', target: actor.id, ailment: 'confusion' })
       actor.actedThisTurn = true
       checkBattleEnd(battle)
       return
@@ -908,6 +918,7 @@ function applyHeal(battle, recipient, baseAmount, opts = {}) {
   // 呪い：回復無効
   if (recipient.ailments.some((a) => a.id === 'curse')) {
     addLog(battle, `　💀 ${recipient.name} は呪われていて回復できない！`, 'ailment')
+    pushEvent(battle, { type: 'ailmentTriggered', target: recipient.id, ailment: 'curse' })
     return
   }
   let amount = baseAmount
@@ -1038,6 +1049,8 @@ function applyAilment(battle, attacker, target, ailmentId, chanceTier, stacks, i
     target.ailments.push({ id: ailmentId, stacks, turns: def.baseDuration })
     addLog(battle, `　${def.icon} ${target.name} は${def.name}になった！（×${stacks}）`, 'ailment')
   }
+  // 付与イベント（新規・上書き（悪化）どちらも通知）
+  pushEvent(battle, { type: 'ailmentApplied', target: target.id, ailment: ailmentId })
 }
 
 // ============================================================
@@ -1054,6 +1067,7 @@ function endRound(battle) {
       const dmg = Math.max(1, Math.round(c.stats.maxHp * STATUS_EFFECTS.burn.params.dotRatioPerStack * burn.stacks))
       applyDamage(battle, c, dmg)
       addLog(battle, `🔥 ${c.name} は火傷で ${dmg} ダメージ`, 'ailment')
+      pushEvent(battle, { type: 'ailmentTriggered', target: c.id, ailment: 'burn' })
     }
 
     // 呪い：デバフ蓄積（毎ターン、ランダムなステータスにデバフ）

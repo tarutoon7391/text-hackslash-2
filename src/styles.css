@@ -164,7 +164,7 @@ button:disabled { opacity: 0.4; cursor: default; }
   50% { box-shadow: 0 0 18px rgba(255, 255, 255, 0.85); }
 }
 
-/* 被弾シェイク */
+/* 被弾シェイク（白系・横揺れ） */
 .panel.shake { animation: shake 0.4s ease; }
 @keyframes shake {
   0%, 100% { transform: translateX(0); }
@@ -172,6 +172,19 @@ button:disabled { opacity: 0.4; cursor: default; }
   40% { transform: translateX(6px); }
   60% { transform: translateX(-4px); }
   80% { transform: translateX(4px); }
+}
+
+/* 状態異常の色付きシェイク（縦揺れ＋状態異常色グロー。白系ダメージシェイクと区別） */
+.se-wrap { border-radius: 8px; }
+.se-wrap.se-active {
+  animation: seShake 0.42s ease;
+  box-shadow: 0 0 14px var(--se-color), inset 0 0 10px var(--se-color);
+}
+@keyframes seShake {
+  0%, 100% { transform: translateY(0); }
+  25% { transform: translateY(-4px); }
+  50% { transform: translateY(3px); }
+  75% { transform: translateY(-2px); }
 }
 
 .enemy-header { display: flex; align-items: center; gap: 10px; }
@@ -269,6 +282,10 @@ button:disabled { opacity: 0.4; cursor: default; }
 .skill-stars { font-size: 10px; color: #ffd94a; }
 .skill-name { font-size: 12px; font-weight: bold; }
 .skill-info { font-size: 10px; color: var(--accent); }
+.skill-desc { font-size: 9px; color: var(--muted); line-height: 1.4; }
+
+/* 用語の色付き強調（下線ではなく色分けでテキストに馴染ませる） */
+.gloss-term { font-weight: bold; cursor: pointer; }
 
 .back-btn {
   width: 100%;
@@ -366,6 +383,47 @@ button:disabled { opacity: 0.4; cursor: default; }
   padding: 12px;
   margin-top: 4px;
 }
+
+/* ===== まとめ用語ポップアップ（スキル詳細より上のレイヤー） ===== */
+.gloss-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 40; /* スキル詳細ポップアップ(z:20)より上に重ねる */
+}
+.gloss-popup {
+  background: var(--panel);
+  border-radius: 14px;
+  border-top: 3px solid var(--accent);
+  padding: 16px;
+  width: min(88vw, 340px);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.gloss-title { font-size: 14px; color: var(--accent); }
+.gloss-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 55dvh;
+  overflow-y: auto; /* 用語が多い場合のみポップアップ内スクロール */
+}
+.gloss-item h4 { font-size: 13px; margin-bottom: 2px; }
+.gloss-category {
+  font-size: 9px;
+  color: var(--muted);
+  background: var(--panel2);
+  border-radius: 5px;
+  padding: 1px 5px;
+  margin-left: 6px;
+  font-weight: normal;
+  vertical-align: middle;
+}
+.gloss-item p { font-size: 11px; color: var(--text); line-height: 1.6; }
 
 /* 通知トースト */
 .toast {

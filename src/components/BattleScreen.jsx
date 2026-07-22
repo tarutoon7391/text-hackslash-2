@@ -13,6 +13,10 @@ import {
 import ActionMenu from './battle/ActionMenu.jsx'
 import SkillDetailPopup from './battle/SkillDetailPopup.jsx'
 import TargetSelector from './battle/TargetSelector.jsx'
+import StatusEffectShake from './battle/StatusEffectShake.jsx'
+import GlossarySummaryPopup from './common/GlossarySummaryPopup.jsx'
+import { STATUS_EFFECT_COLORS } from '../data/statusEffectColors.js'
+import { renderGlossaryText } from '../utils/glossaryText.js'
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
@@ -68,6 +72,8 @@ export default function BattleScreen({ battle, setBattle, onExit }) {
   const [busy, setBusy] = useState(false)                // 行動処理中（アニメーション中）
   const [activeActor, setActiveActor] = useState(null)   // 行動中ハイライト対象
   const [shakes, setShakes] = useState({ player: false, enemy: false })
+  const [seShakes, setSeShakes] = useState({ player: null, enemy: null }) // 状態異常の色付きシェイク（色を保持）
+  const [glossTerms, setGlossTerms] = useState(null) // まとめ用語ポップアップ
   const [toast, setToast] = useState(null)
   const busyRef = useRef(false)
 
@@ -107,7 +113,10 @@ export default function BattleScreen({ battle, setBattle, onExit }) {
       const before = { player: battle.player.stats.hp, enemy: battle.enemy.stats.hp }
       stepBattle(battle)
       refresh()
-      // ダメージが入った側のパネルをシェイク
+      // 状態異常イベント（付与・発動）を取り出す
+      const seEvents = (battle.uiEvents ? battle.uiEvents.splice(0) : [])
+        .filter((ev) => ev.type === 'ailmentApplied' || ev.type === 'ailmentTriggered')
+      // ダメージが入った側のパネルをシェイク（白系）
       const hit = {
         player: battle.player.stats.hp < before.player,
         enemy: battle.enemy.stats.hp < before.enemy,
@@ -116,8 +125,15 @@ export default function BattleScreen({ battle, setBattle, onExit }) {
         setShakes(hit)
         await sleep(450)
         setShakes({ player: false, enemy: false })
-      } else {
+      } else if (seEvents.length === 0) {
         await sleep(250)
+      }
+      // 状態異常の色付きシェイク（該当色で1件ずつ順に再生。長引かないよう3件まで）
+      for (const ev of seEvents.slice(0, 3)) {
+        setSeShakes({ player: null, enemy: null, [ev.target]: STATUS_EFFECT_COLORS[ev.ailment] })
+        await sleep(420)
+        setSeShakes({ player: null, enemy: null })
+        await sleep(60) // アニメーションを確実に再始動させるための小休止
       }
     }
 
@@ -205,17 +221,19 @@ export default function BattleScreen({ battle, setBattle, onExit }) {
         className={`enemy-panel panel ${activeActor === 'enemy' ? 'acting' : ''} ${enemyTargetable ? 'targetable' : ''} ${shakes.enemy ? 'shake' : ''}`}
         onClick={onEnemyTap}
       >
-        <div className="enemy-header">
-          <span className="enemy-big-icon">{enemyDef.icon}</span>
-          <div className="enemy-info">
-            <div className="enemy-title">
-              {e.name}
-              <span className="elem-chip">{ELEMENTS[e.element].icon}{ELEMENTS[e.element].name}</span>
+        <StatusEffectShake color={seShakes.enemy}>
+          <div className="enemy-header">
+            <span className="enemy-big-icon">{enemyDef.icon}</span>
+            <div className="enemy-info">
+              <div className="enemy-title">
+                {e.name}
+                <span className="elem-chip">{ELEMENTS[e.element].icon}{ELEMENTS[e.element].name}</span>
+              </div>
+              <Bar label="HP" value={e.stats.hp} max={e.stats.maxHp} color="#e05555" />
             </div>
-            <Bar label="HP" value={e.stats.hp} max={e.stats.maxHp} color="#e05555" />
           </div>
-        </div>
-        <EffectIcons combatant={e} />
+          <EffectIcons combatant={e} />
+        </StatusEffectShake>
       </div>
 
       {/* 直近ログ */}
@@ -231,14 +249,16 @@ export default function BattleScreen({ battle, setBattle, onExit }) {
         className={`player-panel panel ${activeActor === 'player' ? 'acting' : ''} ${playerTargetable ? 'targetable' : ''} ${shakes.player ? 'shake' : ''}`}
         onClick={onPlayerTap}
       >
-        <div className="player-name">
-          {p.name}
-          <span className="elem-chip">{ELEMENTS[p.element].icon}{ELEMENTS[p.element].name}</span>
-          <span className="turn-label">ターン{battle.turn}</span>
-        </div>
-        <Bar label="HP" value={p.stats.hp} max={p.stats.maxHp} color="#4caf7d" />
-        <Bar label="MP" value={p.stats.mp} max={p.stats.maxMp} color="#4a90d9" />
-        <EffectIcons combatant={p} />
+        <StatusEffectShake color={seShakes.player}>
+          <div className="player-name">
+            {p.name}
+            <span className="elem-chip">{ELEMENTS[p.element].icon}{ELEMENTS[p.element].name}</span>
+            <span className="turn-label">ターン{battle.turn}</span>
+          </div>
+          <Bar label="HP" value={p.stats.hp} max={p.stats.maxHp} color="#4caf7d" />
+          <Bar label="MP" value={p.stats.mp} max={p.stats.maxMp} color="#4a90d9" />
+          <EffectIcons combatant={p} />
+        </StatusEffectShake>
       </div>
 
       {/* 追加ターン表示 */}
@@ -250,6 +270,9 @@ export default function BattleScreen({ battle, setBattle, onExit }) {
           <div className="skill-grid">
             {actions.map((entry) => {
               const elemClass = entry.skill.element ? `elem-${entry.skill.element}` : 'elem-none'
+              // スキル名・効果テキスト内の用語を色付き表示（タップでまとめ用語ポップアップ）
+              const nameText = renderGlossaryText(entry.displayName, setGlossTerms)
+              const descText = renderGlossaryText(entry.skill.desc, setGlossTerms)
               return (
                 <button
                   key={entry.skill.id}
@@ -258,10 +281,11 @@ export default function BattleScreen({ battle, setBattle, onExit }) {
                   onClick={() => onSkillTap(entry)}
                 >
                   <span className="skill-stars">{'★'.repeat(entry.skill.star)}</span>
-                  <span className="skill-name">{entry.displayName}</span>
+                  <span className="skill-name">{nameText.nodes}</span>
                   <span className="skill-info">
                     MP{entry.mpCost}{entry.skill.element ? ` ${ELEMENTS[entry.skill.element].icon}` : ''}
                   </span>
+                  <span className="skill-desc">{descText.nodes}</span>
                 </button>
               )
             })}
@@ -334,6 +358,11 @@ export default function BattleScreen({ battle, setBattle, onExit }) {
 
       {/* 仲間にする等の通知トースト */}
       {toast && <div className="toast">{toast}</div>}
+
+      {/* まとめ用語ポップアップ（スキル一覧の色付き用語タップで開く） */}
+      {glossTerms && (
+        <GlossarySummaryPopup terms={glossTerms} onClose={() => setGlossTerms(null)} />
+      )}
 
       {/* ログ履歴ボトムシート */}
       {showLog && (
