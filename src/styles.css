@@ -215,7 +215,7 @@ button:disabled { opacity: 0.4; cursor: default; }
   background: var(--panel2);
 }
 .effect-chip small { color: var(--muted); }
-.effect-chip.ailment { background: #4a2530; }
+.effect-chip.ailment { background: #4a2530; cursor: pointer; } /* タップで詳細ポップアップ */
 .effect-chip.debuff { background: #45304d; }
 .effect-chip.buff { background: #24463a; }
 
@@ -426,6 +426,20 @@ button:disabled { opacity: 0.4; cursor: default; }
   vertical-align: middle;
 }
 .gloss-item p { font-size: 11px; color: var(--text); line-height: 1.6; }
+
+/* 状態異常の詳細ポップアップ（gloss-popupの派生。上ボーダー色は状態異常色をインラインで指定） */
+.se-popup { gap: 6px; }
+.se-popup-name { font-size: 16px; font-weight: bold; }
+.se-popup-owner { font-size: 11px; color: var(--muted); }
+.se-popup-stats { display: flex; gap: 14px; }
+.se-popup-stat {
+  font-size: 12px;
+  background: var(--panel2);
+  border-radius: 8px;
+  padding: 6px 10px;
+}
+.se-popup-stat b { font-size: 14px; }
+.se-popup-desc { font-size: 12px; line-height: 1.6; }
 
 /* ===== 用語辞典画面（最前面オーバーレイ。元の画面の状態は保持される） ===== */
 .dict-screen {

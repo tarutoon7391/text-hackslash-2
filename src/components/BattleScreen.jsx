@@ -14,6 +14,7 @@ import ActionMenu from './battle/ActionMenu.jsx'
 import SkillDetailPopup from './battle/SkillDetailPopup.jsx'
 import TargetSelector from './battle/TargetSelector.jsx'
 import StatusEffectShake from './battle/StatusEffectShake.jsx'
+import StatusEffectPopup from './battle/StatusEffectPopup.jsx'
 import GlossarySummaryPopup from './common/GlossarySummaryPopup.jsx'
 import { STATUS_EFFECT_COLORS } from '../data/statusEffectColors.js'
 import { GLOSSARY_BY_TERM } from '../data/glossary.js'
@@ -38,12 +39,18 @@ function Bar({ label, value, max, color }) {
 }
 
 // 弱体効果・バフのアイコン列（種類／スタック／残りターン表示）
-function EffectIcons({ combatant }) {
+// 状態異常アイコンは1個ずつ独立して表示され、それぞれタップで詳細ポップアップが開く
+function EffectIcons({ combatant, onAilmentTap }) {
   const items = []
   for (const a of combatant.ailments) {
     const def = STATUS_EFFECTS[a.id]
     items.push(
-      <span key={`a-${a.id}`} className="effect-chip ailment" title={def.name}>
+      <span
+        key={`a-${a.id}`}
+        className="effect-chip ailment"
+        title={def.name}
+        onClick={(ev) => onAilmentTap && onAilmentTap(ev, combatant, a)}
+      >
         {def.icon}×{a.stacks}<small>({a.turns}T)</small>
       </span>
     )
@@ -75,6 +82,7 @@ export default function BattleScreen({ battle, setBattle, onExit, onOpenDictiona
   const [shakes, setShakes] = useState({ player: false, enemy: false })
   const [seShakes, setSeShakes] = useState({ player: null, enemy: null }) // 状態異常の色付きシェイク（色を保持）
   const [glossTerms, setGlossTerms] = useState(null) // まとめ用語ポップアップ
+  const [sePopup, setSePopup] = useState(null) // 状態異常アイコンの詳細ポップアップ
   const [toast, setToast] = useState(null)
   const busyRef = useRef(false)
 
@@ -242,6 +250,18 @@ export default function BattleScreen({ battle, setBattle, onExit, onOpenDictiona
     if (entry) setGlossTerms([entry])
   }
 
+  // 状態異常アイコンのタップ：その状態異常の詳細ポップアップを開く（敵・味方共通）
+  const onAilmentTap = (ev, combatant, ailment) => {
+    if (busy || targeting) return // 対象選択中はパネルタップ（対象確定）を優先する
+    ev.stopPropagation()
+    setSePopup({
+      ailmentId: ailment.id,
+      stacks: ailment.stacks,
+      turns: ailment.turns,
+      ownerName: combatant.name,
+    })
+  }
+
   const enemyTargetable = targeting && ['attack', 'recruit', 'skill'].includes(targeting.kind)
   const playerTargetable = targeting?.kind === 'skillAlly'
   const recentLog = battle.log.slice(-5)
@@ -266,7 +286,7 @@ export default function BattleScreen({ battle, setBattle, onExit, onOpenDictiona
               <Bar label="HP" value={e.stats.hp} max={e.stats.maxHp} color="#e05555" />
             </div>
           </div>
-          <EffectIcons combatant={e} />
+          <EffectIcons combatant={e} onAilmentTap={onAilmentTap} />
         </StatusEffectShake>
       </div>
 
@@ -293,7 +313,7 @@ export default function BattleScreen({ battle, setBattle, onExit, onOpenDictiona
           </div>
           <Bar label="HP" value={p.stats.hp} max={p.stats.maxHp} color="#4caf7d" />
           <Bar label="MP" value={p.stats.mp} max={p.stats.maxMp} color="#4a90d9" />
-          <EffectIcons combatant={p} />
+          <EffectIcons combatant={p} onAilmentTap={onAilmentTap} />
         </StatusEffectShake>
       </div>
 
@@ -392,6 +412,9 @@ export default function BattleScreen({ battle, setBattle, onExit, onOpenDictiona
           </div>
         </div>
       )}
+
+      {/* 状態異常アイコンの詳細ポップアップ */}
+      {sePopup && <StatusEffectPopup info={sePopup} onClose={() => setSePopup(null)} />}
 
       {/* 仲間にする等の通知トースト */}
       {toast && <div className="toast">{toast}</div>}
