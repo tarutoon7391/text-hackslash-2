@@ -441,6 +441,105 @@ button:disabled { opacity: 0.4; cursor: default; }
 .se-popup-stat b { font-size: 14px; }
 .se-popup-desc { font-size: 12px; line-height: 1.6; }
 
+/* ===== ダンジョン画面（1画面完結） ===== */
+.dungeon {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+  padding: 24px 16px calc(16px + env(safe-area-inset-bottom));
+  gap: 16px;
+  justify-content: center;
+}
+.dungeon-zone {
+  background: var(--panel);
+  border: 2px solid var(--line);
+  border-radius: 16px;
+  padding: 24px;
+  text-align: center;
+}
+.dungeon-zone-label { font-size: 15px; font-weight: bold; margin-bottom: 8px; }
+.dungeon-floor { font-size: 56px; font-weight: bold; line-height: 1.1; }
+.dungeon-floor small { font-size: 20px; color: var(--muted); margin-left: 4px; }
+.dungeon-progress { font-size: 12px; color: var(--muted); margin-top: 8px; }
+.dungeon-boss-label { color: #ffd94a; font-weight: bold; margin-left: 8px; }
+.dungeon-hint {
+  text-align: center;
+  font-size: 12px;
+  color: var(--muted);
+  min-height: 32px;
+}
+.dungeon-actions { display: flex; flex-direction: column; gap: 8px; }
+.dungeon-actions .start-btn { margin-top: 0; }
+
+/* ===== チェックポイント選択 ===== */
+.cp-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+.cp-btn {
+  background: var(--panel);
+  border: 2px solid var(--line);
+  border-radius: 10px;
+  padding: 8px 4px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+.cp-btn.selected { border-color: var(--accent); background: var(--panel2); }
+.cp-floor { font-size: 14px; font-weight: bold; }
+.cp-zone { font-size: 10px; color: var(--muted); }
+
+/* ===== ドロップリザルト画面 ===== */
+.loot-screen {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+  padding: 24px 16px calc(16px + env(safe-area-inset-bottom));
+  gap: 12px;
+  justify-content: center;
+}
+.loot-banner {
+  text-align: center;
+  font-size: 26px;
+  font-weight: bold;
+  background: #24463a;
+  border-radius: 12px;
+  padding: 14px;
+}
+.loot-drop-label { text-align: center; font-size: 12px; color: var(--accent); }
+.loot-card {
+  background: var(--panel);
+  border: 2px solid var(--line);
+  border-radius: 12px;
+  padding: 12px;
+}
+.loot-head { display: flex; justify-content: space-between; align-items: center; font-size: 15px; font-weight: bold; }
+.loot-rarity { font-size: 12px; }
+.loot-meta { font-size: 11px; color: var(--muted); margin: 6px 0; }
+.loot-skills { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
+.loot-enchants { display: flex; flex-wrap: wrap; gap: 4px; }
+.loot-enchant {
+  font-size: 10px;
+  border-radius: 6px;
+  padding: 3px 7px;
+  background: var(--panel2);
+}
+.loot-enchant.unlimited { color: #ffcf8a; } /* 青天井組 */
+.loot-enchant.capped { color: #8ecbff; }    /* 渋カーブ組 */
+.loot-enchant.none { color: var(--muted); }
+.weapon-enchants { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.drop-tag {
+  font-size: 9px;
+  color: var(--accent);
+  background: var(--panel2);
+  border-radius: 5px;
+  padding: 1px 5px;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
 /* ===== 用語辞典画面（最前面オーバーレイ。元の画面の状態は保持される） ===== */
 .dict-screen {
   position: fixed;

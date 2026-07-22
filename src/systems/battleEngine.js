@@ -88,7 +88,8 @@ function getPlusPowerMult(plus) {
 // 戦闘の生成
 // ============================================================
 
-export function createBattle({ jobId, weapon, enemyId, seed = null }) {
+// enemyId：enemies.jsの固定敵ID／enemyDef：生成した敵定義（ダンジョン用）のどちらかを渡す
+export function createBattle({ jobId, weapon, enemyId, enemyDef = null, seed = null }) {
   const rng = seed != null ? createSeededRng(seed) : Math.random
   const job = JOBS[jobId]
   const jobStats = calcJobStats(jobId)
@@ -105,16 +106,16 @@ export function createBattle({ jobId, weapon, enemyId, seed = null }) {
     crit: Math.round(jobStats.crit * typeMods.crit),
   }
 
-  const enemyDef = ENEMIES[enemyId]
+  const def = enemyDef || ENEMIES[enemyId]
   const enemyStats = {
-    maxHp: enemyDef.stats.hp,
-    maxMp: enemyDef.stats.mp,
-    hp: enemyDef.stats.hp,
-    mp: enemyDef.stats.mp,
-    atk: enemyDef.stats.atk,
-    def: enemyDef.stats.def,
-    spd: enemyDef.stats.spd,
-    crit: enemyDef.stats.crit,
+    maxHp: def.stats.hp,
+    maxMp: def.stats.mp,
+    hp: def.stats.hp,
+    mp: def.stats.mp,
+    atk: def.stats.atk,
+    def: def.stats.def,
+    spd: def.stats.spd,
+    crit: def.stats.crit,
   }
 
   const makeFlags = () => ({
@@ -154,23 +155,24 @@ export function createBattle({ jobId, weapon, enemyId, seed = null }) {
     },
     enemy: {
       id: 'enemy',
-      name: enemyDef.name,
-      enemyId,
-      element: enemyDef.element,
-      attackElement: enemyDef.element,
+      name: def.name,
+      enemyId: enemyId || def.id,
+      enemyDef: def, // UI表示用（アイコン等）。生成敵はENEMIESに存在しないため定義を保持する
+      element: def.element,
+      attackElement: def.element,
       stats: enemyStats,
-      skills: enemyDef.skills.map((skillId) => ({ skillId, plus: 0 })),
+      skills: def.skills.map((skillId) => ({ skillId, plus: 0 })),
       ailments: [],
       mods: [],
       flags: makeFlags(),
-      ailmentResists: enemyDef.ailmentResists || {},
+      ailmentResists: def.ailmentResists || {},
       lastHitTurn: -10,
       actedThisTurn: false,
       extraActionsThisRound: 0,
     },
   }
 
-  addLog(battle, `${enemyDef.icon} ${enemyDef.name} が現れた！`, 'system')
+  addLog(battle, `${def.icon} ${def.name} が現れた！`, 'system')
   return battle
 }
 

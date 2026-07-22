@@ -88,7 +88,8 @@ export default function BattleScreen({ battle, setBattle, onExit, onOpenDictiona
 
   const p = battle.player
   const e = battle.enemy
-  const enemyDef = ENEMIES[e.enemyId]
+  // ダンジョンの生成敵はENEMIESに存在しないため、battle側が保持する定義を優先する
+  const enemyDef = e.enemyDef || ENEMIES[e.enemyId]
   const actions = getActionList(battle)
   const ended = battle.phase === 'ended'
   const extraTurn = battle.phase === 'extraInput'
@@ -373,7 +374,10 @@ export default function BattleScreen({ battle, setBattle, onExit, onOpenDictiona
             {battle.result === 'escape' && '🏃 逃げ出した'}
             {battle.result === 'draw' && '⏱️ 引き分け'}
           </div>
-          <button className="start-btn" onClick={onExit}>セットアップへ戻る</button>
+          {/* 勝利ならドロップ結果へ、それ以外はロビーへ（遷移先の判断はApp側） */}
+          <button className="start-btn" onClick={onExit}>
+            {battle.result === 'win' ? 'けっかへ' : 'ロビーに戻る'}
+          </button>
         </div>
       )}
 

@@ -1,29 +1,101 @@
-// アプリ全体：セットアップ画面⇔戦闘画面の切り替え＋用語辞典オーバーレイ
-// 用語辞典は「画面切り替え」ではなくオーバーレイとして重ねるので、
-// 戦闘中に開いても戦闘の状態（HP/MP・ターン進行等）は失われない
+// アプリ全体の画面フロー管理
+// ロビー → ダンジョン → 戦闘 → 勝利ならドロップ結果 →（次の階 or ロビー）
+// 敗北・逃走は常にロビーへ戻る（GDD 14番）
+// 用語辞典はオーバーレイとして重ねるので、どの画面の状態も失われない
 import { useState } from 'react'
 import SetupScreen from './components/SetupScreen.jsx'
 import BattleScreen from './components/BattleScreen.jsx'
+import DungeonScreen from './components/dungeon/DungeonScreen.jsx'
+import LootResultScreen from './components/dungeon/LootResultScreen.jsx'
 import GlossaryDictionary from './pages/GlossaryDictionary.jsx'
 import { createBattle } from './systems/battleEngine.js'
+import { useDungeonState, isBossFloor } from './systems/dungeonState.js'
+import { useInventoryState } from './systems/inventoryState.js'
+import { generateEnemy } from './systems/enemyGenerator.js'
+import { generateLoot } from './systems/lootSystem.js'
 
 export default function App() {
+  const [screen, setScreen] = useState('lobby') // lobby | dungeon | battle | loot
   const [battle, setBattle] = useState(null)
+  const [loadout, setLoadout] = useState(null)   // {jobId, weapon}
+  const [lastLoot, setLastLoot] = useState(null) // 直近のドロップ（リザルト表示用）
+  const [lootFloor, setLootFloor] = useState(null)
   const [showDictionary, setShowDictionary] = useState(false)
+  const dungeon = useDungeonState()
+  const inventory = useInventoryState()
 
-  const startBattle = ({ jobId, weapon, enemyId }) => {
-    setBattle(createBattle({ jobId, weapon, enemyId }))
+  // ロビーから出発
+  const depart = ({ jobId, weapon, startFloor }) => {
+    setLoadout({ jobId, weapon })
+    dungeon.enterDungeon(startFloor)
+    setScreen('dungeon')
   }
 
-  const backToSetup = () => setBattle(null)
-  const openDictionary = () => setShowDictionary(true)
+  // ダンジョンで「進む」→ その階の敵を生成して戦闘開始
+  const advance = () => {
+    const enemyDef = generateEnemy({ floor: dungeon.currentFloor })
+    setBattle(createBattle({ jobId: loadout.jobId, weapon: loadout.weapon, enemyDef }))
+    setScreen('battle')
+  }
+
+  // 戦闘終了（勝利→ドロップ生成してリザルトへ／敗北・逃走→ロビーへ）
+  const exitBattle = () => {
+    const result = battle?.result
+    const floor = dungeon.currentFloor
+    setBattle(null)
+    if (result === 'win' && floor != null) {
+      const grade = isBossFloor(floor) ? 'boss' : 'grunt'
+      const item = generateLoot({ floor, grade })
+      inventory.addItem(item)
+      // ボス撃破で次ブロックの先頭階（次のチェックポイント）を解放
+      if (isBossFloor(floor)) dungeon.unlockCheckpoint(floor + 1)
+      setLastLoot(item)
+      setLootFloor(floor)
+      setScreen('loot')
+    } else {
+      // 敗北・逃走時は常にロビーへ（特定階への自動帰還はしない）
+      dungeon.leaveDungeon()
+      setScreen('lobby')
+    }
+  }
+
+  // リザルトから次の階へ
+  const nextFloor = () => {
+    dungeon.advanceFloor()
+    setScreen('dungeon')
+  }
+
+  // ロビーへ帰還
+  const toLobby = () => {
+    dungeon.leaveDungeon()
+    setScreen('lobby')
+  }
 
   return (
     <>
-      {battle ? (
-        <BattleScreen battle={battle} setBattle={setBattle} onExit={backToSetup} onOpenDictionary={openDictionary} />
-      ) : (
-        <SetupScreen onStart={startBattle} onOpenDictionary={openDictionary} />
+      {screen === 'lobby' && (
+        <SetupScreen
+          onDepart={depart}
+          checkpoints={dungeon.checkpoints}
+          inventory={inventory.items}
+          initialJobId={loadout?.jobId}
+          initialWeaponId={loadout?.weapon?.id}
+          onOpenDictionary={() => setShowDictionary(true)}
+        />
+      )}
+      {screen === 'dungeon' && (
+        <DungeonScreen floor={dungeon.currentFloor} onAdvance={advance} onReturnLobby={toLobby} />
+      )}
+      {screen === 'battle' && battle && (
+        <BattleScreen
+          battle={battle}
+          setBattle={setBattle}
+          onExit={exitBattle}
+          onOpenDictionary={() => setShowDictionary(true)}
+        />
+      )}
+      {screen === 'loot' && lastLoot && (
+        <LootResultScreen item={lastLoot} floor={lootFloor} onNext={nextFloor} onLobby={toLobby} />
       )}
       {/* 用語辞典（最前面のオーバーレイ。閉じれば元の画面にそのまま復帰） */}
       {showDictionary && <GlossaryDictionary onBack={() => setShowDictionary(false)} />}

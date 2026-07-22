@@ -1,28 +1,34 @@
-// セットアップ画面：職業とテスト武器と敵を選んで戦闘開始
+// ロビー（拠点）画面：職業・武器・出発チェックポイントを選んでダンジョンへ出発する
+// 武器はテスト用サンプルに加えて、ドロップで入手したインベントリの武器も選べる
+// （本格的な抽出・移植UIはフェーズ3。ここでは「装備する武器を選ぶ」だけのシンプルな一覧）
 // スキルチップ：1回タップで白枠選択、選択状態でもう1回タップすると詳細ポップアップ
 import { useState, useMemo } from 'react'
 import { JOBS, JOB_IDS, calcJobStats } from '../data/jobs.js'
 import { WEAPON_TYPES } from '../data/weaponTypes.js'
 import { ELEMENTS } from '../data/elements.js'
 import { RARITIES } from '../data/rarities.js'
-import { ENEMIES, ENEMY_IDS } from '../data/enemies.js'
 import { SAMPLE_WEAPONS } from '../data/sampleWeapons.js'
 import { ALL_SKILLS_BY_ID } from '../data/skills_elemental.js'
 import SkillDetailPopup from './battle/SkillDetailPopup.jsx'
+import CheckpointSelector from './dungeon/CheckpointSelector.jsx'
 
-export default function SetupScreen({ onStart, onOpenDictionary }) {
-  const [jobId, setJobId] = useState('swordsman')
-  const [weaponId, setWeaponId] = useState(null)
-  const [enemyId, setEnemyId] = useState('goblin')
+export default function SetupScreen({ onDepart, checkpoints, inventory, initialJobId, initialWeaponId, onOpenDictionary }) {
+  const [jobId, setJobId] = useState(initialJobId || 'swordsman')
+  const [weaponId, setWeaponId] = useState(initialWeaponId || null)
+  const [startFloor, setStartFloor] = useState(checkpoints[checkpoints.length - 1]) // 既定は最深チェックポイント
   const [selectedChip, setSelectedChip] = useState(null) // `${weaponId}:${index}`
   const [popupSkill, setPopupSkill] = useState(null)     // {skill, plus}
 
   const job = JOBS[jobId]
-  const equipable = useMemo(
+  // 装備可能武器：テスト用サンプル＋インベントリのドロップ武器
+  const inventoryWeapons = inventory.filter((it) => it.slot === 'weapon')
+  const equipableSamples = useMemo(
     () => SAMPLE_WEAPONS.filter((w) => job.equipableWeaponTypes.includes(w.weaponType)),
     [jobId]
   )
-  const weapon = equipable.find((w) => w.id === weaponId) || equipable[0]
+  const equipableDrops = inventoryWeapons.filter((w) => job.equipableWeaponTypes.includes(w.weaponType))
+  const allEquipable = [...equipableDrops, ...equipableSamples]
+  const weapon = allEquipable.find((w) => w.id === weaponId) || allEquipable[0]
   const stats = calcJobStats(jobId)
 
   // スキルチップのタップ：1回目=白枠選択、2回目=詳細ポップアップ
@@ -37,10 +43,58 @@ export default function SetupScreen({ onStart, onOpenDictionary }) {
     }
   }
 
+  const renderWeaponCard = (w, isDrop) => {
+    const rarity = RARITIES[w.rarity]
+    const elem = ELEMENTS[w.element]
+    return (
+      <div
+        key={w.id}
+        role="button"
+        tabIndex={0}
+        className={`weapon-card ${w.id === weapon?.id ? 'selected' : ''}`}
+        style={{ borderColor: w.id === weapon?.id ? rarity.color : undefined }}
+        onClick={() => setWeaponId(w.id)}
+      >
+        <div className="weapon-head">
+          <span>{WEAPON_TYPES[w.weaponType].icon} {w.name}{isDrop && <span className="drop-tag">{w.floor}階産</span>}</span>
+          <span className="weapon-rarity" style={{ color: rarity.color }}>{rarity.name}</span>
+        </div>
+        <div className="weapon-meta">
+          {elem.icon}{elem.name}属性 ／ ATK+{w.atk}
+        </div>
+        <div className="weapon-skills">
+          {w.skills.length === 0 && <span className="skill-chip empty">スキルなし</span>}
+          {w.skills.map((s, i) => {
+            const sk = ALL_SKILLS_BY_ID[s.skillId]
+            const elemClass = sk.element ? `elem-${sk.element}` : 'elem-none'
+            const key = `${w.id}:${i}`
+            return (
+              <span
+                key={i}
+                className={`skill-chip ${elemClass} ${selectedChip === key ? 'selected' : ''}`}
+                onClick={(ev) => onChipTap(ev, w, i)}
+              >
+                {'★'.repeat(sk.star)} {sk.name}{s.plus > 0 ? `(+${s.plus})` : ''}
+              </span>
+            )
+          })}
+        </div>
+        {/* エンチャント（ドロップ品のみ持つ） */}
+        {w.enchants && w.enchants.length > 0 && (
+          <div className="weapon-enchants">
+            {w.enchants.map((en, i) => (
+              <span key={i} className={`loot-enchant ${en.kind}`}>✦ {en.name.replace('%', '')}{en.value}%</span>
+            ))}
+          </div>
+        )}
+      </div>
+    )
+  }
+
   return (
     <div className="setup">
       <h1 className="setup-title">⚔️ text-hackslash-2</h1>
-      <p className="setup-sub">フェーズ1：ソロ戦闘テスト</p>
+      <p className="setup-sub">拠点ロビー</p>
 
       {/* 用語辞典への導線 */}
       <button className="dict-link" onClick={onOpenDictionary}>📖 用語辞典</button>
@@ -68,78 +122,32 @@ export default function SetupScreen({ onStart, onOpenDictionary }) {
         HP{stats.hp}／MP{stats.mp}／ATK{stats.atk}／DEF{stats.def}／SPD{stats.spd}／会心{stats.crit}%
       </div>
 
+      {equipableDrops.length > 0 && (
+        <>
+          <h2 className="section-label">武器（ドロップ入手）</h2>
+          <div className="weapon-list">
+            {equipableDrops.map((w) => renderWeaponCard(w, true))}
+          </div>
+        </>
+      )}
+
       <h2 className="section-label">武器（テスト用サンプル）</h2>
       <div className="weapon-list">
-        {equipable.map((w) => {
-          const rarity = RARITIES[w.rarity]
-          const elem = ELEMENTS[w.element]
-          return (
-            <div
-              key={w.id}
-              role="button"
-              tabIndex={0}
-              className={`weapon-card ${w.id === weapon?.id ? 'selected' : ''}`}
-              style={{ borderColor: w.id === weapon?.id ? rarity.color : undefined }}
-              onClick={() => setWeaponId(w.id)}
-            >
-              <div className="weapon-head">
-                <span>{WEAPON_TYPES[w.weaponType].icon} {w.name}</span>
-                <span className="weapon-rarity" style={{ color: rarity.color }}>{rarity.name}</span>
-              </div>
-              <div className="weapon-meta">
-                {elem.icon}{elem.name}属性 ／ ATK+{w.atk}
-              </div>
-              <div className="weapon-skills">
-                {w.skills.length === 0 && <span className="skill-chip empty">スキルなし</span>}
-                {w.skills.map((s, i) => {
-                  const sk = ALL_SKILLS_BY_ID[s.skillId]
-                  const elemClass = sk.element ? `elem-${sk.element}` : 'elem-none'
-                  const key = `${w.id}:${i}`
-                  return (
-                    <span
-                      key={i}
-                      className={`skill-chip ${elemClass} ${selectedChip === key ? 'selected' : ''}`}
-                      onClick={(ev) => onChipTap(ev, w, i)}
-                    >
-                      {'★'.repeat(sk.star)} {sk.name}{s.plus > 0 ? `(+${s.plus})` : ''}
-                    </span>
-                  )
-                })}
-              </div>
-            </div>
-          )
-        })}
+        {equipableSamples.map((w) => renderWeaponCard(w, false))}
       </div>
 
-      <h2 className="section-label">敵</h2>
-      <div className="enemy-grid">
-        {ENEMY_IDS.map((id) => {
-          const en = ENEMIES[id]
-          const elem = ELEMENTS[en.element]
-          return (
-            <button
-              key={id}
-              className={`enemy-card ${id === enemyId ? 'selected' : ''}`}
-              onClick={() => setEnemyId(id)}
-            >
-              <span className="enemy-icon">{en.icon}</span>
-              <span className="enemy-name">{en.name}</span>
-              <span className="enemy-elem">{elem.icon}{elem.name}</span>
-            </button>
-          )
-        })}
-      </div>
-      <div className="stat-row">{ENEMIES[enemyId].description}</div>
+      <h2 className="section-label">出発チェックポイント</h2>
+      <CheckpointSelector checkpoints={checkpoints} selected={startFloor} onSelect={setStartFloor} />
 
       <button
         className="start-btn"
         disabled={!weapon}
-        onClick={() => onStart({ jobId, weapon, enemyId })}
+        onClick={() => onDepart({ jobId, weapon, startFloor })}
       >
-        戦闘開始！
+        🏰 {startFloor}階から出発！
       </button>
 
-      {/* スキル詳細ポップアップ（セットアップ画面では「使う」なし） */}
+      {/* スキル詳細ポップアップ（ロビーでは「使う」なし） */}
       {popupSkill && (
         <SkillDetailPopup
           skill={popupSkill.skill}
