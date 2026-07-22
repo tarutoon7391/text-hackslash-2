@@ -246,26 +246,71 @@ export function statLabel(stat) {
 // 行動の投入（UIエントリポイント）
 // ============================================================
 
-// action: {type:'skill', skillRef, manualTargetKey?} | {type:'basic'}
-export function submitPlayerAction(battle, action) {
+// action: {type:'skill', skillRef, manualTargetKey?} | {type:'normalAttack'}（'basic'は旧名の別名）
+//
+// ラウンド開始：敵の行動を決めて行動順キューを作る。実行はstepBattleで1手ずつ進める
+// （UI側がハイライト・シェイク等の演出を挟みながら順番に処理できるようにするため）
+export function beginRound(battle, action) {
   if (battle.phase === 'ended') return battle
-
   if (battle.phase === 'extraInput') {
-    // 追加ターン：プレイヤーだけが1回行動し、残りのキューを流す
-    battle.phase = 'input'
-    performAction(battle, battle.player, action)
-    handleExtraTurn(battle, battle.player)
-    if (battle.phase === 'extraInput') return battle
-    continueRound(battle)
+    // 追加ターン：プレイヤーの行動をキュー先頭に積んで残りを続行
+    battle.phase = 'acting'
+    battle._queue.unshift({ actorId: 'player', action })
     return battle
   }
-
-  // 通常ラウンド：敵の行動を決め、行動順に並べて実行
   battle.player.extraActionsThisRound = 0
   battle.enemy.extraActionsThisRound = 0
   const enemyAction = chooseEnemyAction(battle)
   battle._queue = buildTurnOrder(battle, action, enemyAction)
-  continueRound(battle)
+  battle.phase = 'acting'
+  return battle
+}
+
+// 次に行動する予定のアクターID（行動中ハイライト演出用）。キューが空ならnull
+export function peekNextActor(battle) {
+  return battle._queue.length > 0 ? battle._queue[0].actorId : null
+}
+
+// 1手だけ進める。戻り値で「誰が行動したか／ラウンドが終わったか」をUIに伝える
+// {type:'action'|'roundEnd'|'extraInput'|'ended', actorId?}
+export function stepBattle(battle) {
+  if (battle.result) {
+    battle.phase = 'ended'
+    return { type: 'ended' }
+  }
+  if (battle._queue.length === 0) {
+    // 全員行動済み→ラウンド終了処理（状態異常のターン経過など）
+    endRound(battle)
+    battle.phase = battle.result ? 'ended' : 'input'
+    return { type: battle.result ? 'ended' : 'roundEnd' }
+  }
+  const entry = battle._queue.shift()
+  const actor = battle[entry.actorId]
+  if (actor.stats.hp > 0) {
+    performAction(battle, actor, entry.action)
+    if (!battle.result) handleExtraTurn(battle, actor)
+  }
+  if (battle.result) {
+    battle.phase = 'ended'
+    return { type: 'ended', actorId: entry.actorId }
+  }
+  if (battle.phase === 'extraInput') return { type: 'extraInput', actorId: entry.actorId }
+  return { type: 'action', actorId: entry.actorId }
+}
+
+// まとめて1ラウンド実行する互換API（スモークテスト・自動戦闘用）
+export function submitPlayerAction(battle, action) {
+  beginRound(battle, action)
+  while (battle.phase === 'acting') stepBattle(battle)
+  return battle
+}
+
+// 逃げる：即座に戦闘離脱する（結果は'escape'）
+export function escapeBattle(battle) {
+  if (battle.phase === 'ended') return battle
+  battle.result = 'escape'
+  battle.phase = 'ended'
+  addLog(battle, `🏃 ${battle.player.name} は戦闘から離脱した`, 'system')
   return battle
 }
 
@@ -287,22 +332,6 @@ function actionHasGuaranteedFirst(action) {
   if (action.type !== 'skill') return false
   const skill = ALL_SKILLS_BY_ID[action.skillRef.skillId]
   return Boolean(skill.attack?.guaranteedFirst)
-}
-
-function continueRound(battle) {
-  while (battle._queue.length > 0 && !battle.result) {
-    const entry = battle._queue.shift()
-    const actor = battle[entry.actorId]
-    if (actor.stats.hp <= 0) continue
-    performAction(battle, actor, entry.action)
-    if (battle.result) break
-    handleExtraTurn(battle, actor)
-    if (battle.phase === 'extraInput') return // プレイヤーの追加行動待ち
-  }
-  if (!battle.result) {
-    endRound(battle)
-  }
-  battle.phase = battle.result ? 'ended' : 'input'
 }
 
 function handleExtraTurn(battle, actor) {
@@ -373,13 +402,9 @@ function performAction(battle, actor, action) {
   }
 
   // --- 行動本体 ---
-  if (action.type === 'basic') {
-    const cfg = BATTLE_CONFIG.basicAttack
-    addLog(battle, `${actor.name} の${cfg.name}！`, 'action')
-    executeAttack(battle, actor, target, {
-      name: cfg.name, element: null, mp: 0, target: 'enemy',
-      attack: { power: cfg.power, hits: 1 }, effects: [],
-    }, { plus: 0 })
+  if (action.type === 'normalAttack' || action.type === 'basic') {
+    // 通常攻撃（'basic'は旧名の別名として残す）
+    executeNormalAttack(battle, actor, target)
   } else {
     const skill = ALL_SKILLS_BY_ID[action.skillRef.skillId]
     const mpCost = getSkillMpCost(action.skillRef)
@@ -411,6 +436,65 @@ function performAction(battle, actor, action) {
 
   actor.actedThisTurn = true
   checkBattleEnd(battle)
+}
+
+// ============================================================
+// 通常攻撃（スキル計算とは独立したシンプルな処理）
+// MP消費0・威力1.0倍固定・属性なし・追加効果なし・会心判定あり
+// 数値はbattleConfig.basicAttackを参照（ハードコーディング禁止）
+// ============================================================
+
+function executeNormalAttack(battle, attacker, defender) {
+  const cfg = BATTLE_CONFIG.basicAttack
+  addLog(battle, `${attacker.name} の${cfg.name}！`, 'action')
+
+  // 命中判定
+  const hitChance = BATTLE_CONFIG.baseAccuracy + getEffStat(attacker, 'accuracy') / 100 - getEffStat(defender, 'evasion') / 100
+  if (battle.rng() >= hitChance) {
+    addLog(battle, `　${defender.name} は攻撃をかわした！`, 'miss')
+    return
+  }
+
+  // 会心判定
+  const isCrit = battle.rng() < clamp(getEffStat(attacker, 'crit'), 0, 100) / 100
+  const critMult = isCrit ? BATTLE_CONFIG.critMultiplier : 1
+
+  // DEF軽減・被ダメ軽減（属性相性・一致ボーナスは通常攻撃には乗らない）
+  const mitigation = BATTLE_CONFIG.defenseFactor / (BATTLE_CONFIG.defenseFactor + getEffStat(defender, 'def'))
+  const cut = clamp(getEffStat(defender, 'damageCut'), -100, 90)
+
+  // 凍結中の敵への追撃ボーナス（被弾で解除の統一ルール）
+  let freezeMult = 1
+  const frozen = defender.ailments.find((a) => a.id === 'freeze')
+  if (frozen) {
+    freezeMult = 1 + STATUS_EFFECTS.freeze.params.breakBonusPerStack * frozen.stacks
+  }
+
+  const variance = 1 + (battle.rng() * 2 - 1) * BATTLE_CONFIG.damageVariance
+  const dmg = Math.max(1, Math.round(
+    getEffStat(attacker, 'atk') * cfg.power * critMult * mitigation * (1 - cut / 100) * freezeMult * variance
+  ))
+  applyDamage(battle, defender, dmg)
+  defender.lastHitTurn = battle.turn
+  addLog(battle, `　${isCrit ? '💥会心！ ' : ''}${defender.name} に ${dmg} ダメージ`, isCrit ? 'crit' : 'damage')
+
+  // 凍結は被弾で解除
+  if (frozen) {
+    defender.ailments = defender.ailments.filter((a) => a.id !== 'freeze')
+    addLog(battle, `　🧊 ${defender.name} の凍結が砕けた！`, 'ailment')
+  }
+
+  // 反撃（迎撃の構え）
+  if (defender.stats.hp > 0 && defender.flags.counterStance && defender.flags.counterStance.uses > 0) {
+    const stance = defender.flags.counterStance
+    stance.uses--
+    if (stance.uses <= 0) defender.flags.counterStance = null
+    const counterAtk = getEffStat(defender, 'atk')
+    const counterMitigation = BATTLE_CONFIG.defenseFactor / (BATTLE_CONFIG.defenseFactor + getEffStat(attacker, 'def'))
+    const counterDmg = Math.max(1, Math.round(counterAtk * stance.power * counterMitigation))
+    applyDamage(battle, attacker, counterDmg)
+    addLog(battle, `　⚔️ ${defender.name} の反撃！ ${attacker.name} に ${counterDmg} ダメージ`, 'damage')
+  }
 }
 
 // ============================================================

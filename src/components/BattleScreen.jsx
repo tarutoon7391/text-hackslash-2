@@ -1,13 +1,20 @@
-// 戦闘画面：1画面完結（敵情報・自HP/MP・弱体効果アイコン・スキルボタン・直近ログ）
-// ログ履歴はボトムシートで別途スクロール参照
-import { useState } from 'react'
+// 戦闘画面：1画面完結（敵情報・自HP/MP・弱体効果アイコン・コマンド4ボタン・直近ログ）
+// - 行動はSPD順に1体ずつ処理し、行動中のキャラを緑の蛍光ハイライトで表示
+// - 被弾したキャラのパネルはシェイクアニメーション
+// - コマンドは「こうげき／スキル／仲間にする／逃げる」の4択フロー
+import { useRef, useState } from 'react'
 import { ELEMENTS } from '../data/elements.js'
 import { ENEMIES } from '../data/enemies.js'
 import { STATUS_EFFECTS } from '../data/statusEffects.js'
-import { BATTLE_CONFIG } from '../data/battleConfig.js'
 import {
-  submitPlayerAction, getActionList, getManualTargetCandidates, statLabel,
+  beginRound, stepBattle, peekNextActor, escapeBattle,
+  getActionList, getManualTargetCandidates, statLabel,
 } from '../systems/battleEngine.js'
+import ActionMenu from './battle/ActionMenu.jsx'
+import SkillDetailPopup from './battle/SkillDetailPopup.jsx'
+import TargetSelector from './battle/TargetSelector.jsx'
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
 // HP/MPバー
 function Bar({ label, value, max, color }) {
@@ -53,8 +60,16 @@ function EffectIcons({ combatant }) {
 
 export default function BattleScreen({ battle, setBattle, onExit }) {
   const [showLog, setShowLog] = useState(false)
-  // 手動選択待ち：{action, candidates}
-  const [pendingSelect, setPendingSelect] = useState(null)
+  const [uiMode, setUiMode] = useState('menu')          // 'menu' | 'skillList'
+  const [selectedSkillId, setSelectedSkillId] = useState(null) // 白枠選択中のスキル
+  const [popupEntry, setPopupEntry] = useState(null)     // スキル詳細ポップアップ
+  const [targeting, setTargeting] = useState(null)       // {kind:'attack'|'recruit'|'skill'|'skillAlly', entry?}
+  const [effectPick, setEffectPick] = useState(null)     // 弱体効果の手動選択 {entry, candidates}
+  const [busy, setBusy] = useState(false)                // 行動処理中（アニメーション中）
+  const [activeActor, setActiveActor] = useState(null)   // 行動中ハイライト対象
+  const [shakes, setShakes] = useState({ player: false, enemy: false })
+  const [toast, setToast] = useState(null)
+  const busyRef = useRef(false)
 
   const p = battle.player
   const e = battle.enemy
@@ -63,30 +78,133 @@ export default function BattleScreen({ battle, setBattle, onExit }) {
   const ended = battle.phase === 'ended'
   const extraTurn = battle.phase === 'extraInput'
 
-  const doAction = (action) => {
-    submitPlayerAction(battle, action)
-    setBattle({ ...battle }) // 再レンダリング用に参照を更新
+  const refresh = () => setBattle({ ...battle })
+
+  const resetSelection = () => {
+    setUiMode('menu')
+    setSelectedSkillId(null)
+    setPopupEntry(null)
+    setTargeting(null)
+    setEffectPick(null)
   }
 
+  // 行動を確定し、SPD順に1手ずつアニメーション付きで処理する
+  const runAction = async (action) => {
+    if (busyRef.current) return
+    busyRef.current = true
+    resetSelection()
+    setBusy(true)
+    beginRound(battle, action)
+    refresh()
+
+    while (battle.phase === 'acting') {
+      // 次の行動者に緑ハイライトを移してから処理する
+      const next = peekNextActor(battle)
+      if (next) {
+        setActiveActor(next)
+        await sleep(500)
+      }
+      const before = { player: battle.player.stats.hp, enemy: battle.enemy.stats.hp }
+      stepBattle(battle)
+      refresh()
+      // ダメージが入った側のパネルをシェイク
+      const hit = {
+        player: battle.player.stats.hp < before.player,
+        enemy: battle.enemy.stats.hp < before.enemy,
+      }
+      if (hit.player || hit.enemy) {
+        setShakes(hit)
+        await sleep(450)
+        setShakes({ player: false, enemy: false })
+      } else {
+        await sleep(250)
+      }
+    }
+
+    setActiveActor(null)
+    setBusy(false)
+    busyRef.current = false
+    refresh()
+  }
+
+  // ===== スキルフロー =====
   const onSkillTap = (entry) => {
-    if (!entry.usable || ended) return
+    if (!entry.usable) return
+    if (selectedSkillId !== entry.skill.id) {
+      setSelectedSkillId(entry.skill.id) // 1回目のタップ：白枠で選択状態
+    } else {
+      setPopupEntry(entry) // 選択状態でもう1回タップ：詳細ポップアップ
+    }
+  }
+
+  const onUseSkill = (entry) => {
+    setPopupEntry(null)
+    const skill = entry.skill
+    const targetsSelf = ['self', 'ally', 'allies'].includes(skill.target)
+    if (!targetsSelf || skill.attack) {
+      // 敵対象スキル：対象選択（敵をタップ）へ
+      setTargeting({ kind: 'skill', entry })
+    } else if (entry.needsManualTarget) {
+      // 自分側対象で弱体効果の手動選択が必要（解除系）：自分をタップして選ぶ
+      setTargeting({ kind: 'skillAlly', entry })
+    } else {
+      // 対象不要（自己バフ等）はそのまま行動確定
+      runAction({ type: 'skill', skillRef: entry.ref })
+    }
+  }
+
+  // 対象（敵 or 自分）タップで行動確定。弱体効果の手動選択が必要ならその選択へ
+  const confirmSkillTarget = (entry) => {
     if (entry.needsManualTarget) {
       const candidates = getManualTargetCandidates(battle, entry.skill)
       if (candidates.length > 0) {
-        setPendingSelect({ ref: entry.ref, candidates })
+        setTargeting(null)
+        setEffectPick({ entry, candidates })
         return
       }
-      // 対象がなければそのまま使用（効果は空振り）
     }
-    doAction({ type: 'skill', skillRef: entry.ref })
+    runAction({ type: 'skill', skillRef: entry.ref })
   }
 
+  // ===== 対象パネルのタップ処理 =====
+  const onEnemyTap = () => {
+    if (!targeting) return
+    if (targeting.kind === 'attack') {
+      runAction({ type: 'normalAttack' })
+    } else if (targeting.kind === 'recruit') {
+      // 仲間にする（捕獲）はフェーズ3.5相当で実装予定。
+      // 現状は対象選択フローの見た目のみで、捕獲判定ロジックには接続しない
+      setTargeting(null)
+      setToast('モンスター仲間システムは今後のフェーズで実装予定')
+      setTimeout(() => setToast(null), 1800)
+    } else if (targeting.kind === 'skill') {
+      confirmSkillTarget(targeting.entry)
+    }
+  }
+
+  const onPlayerTap = () => {
+    if (targeting?.kind === 'skillAlly') {
+      confirmSkillTarget(targeting.entry)
+    }
+  }
+
+  const onEscape = () => {
+    escapeBattle(battle)
+    resetSelection()
+    refresh()
+  }
+
+  const enemyTargetable = targeting && ['attack', 'recruit', 'skill'].includes(targeting.kind)
+  const playerTargetable = targeting?.kind === 'skillAlly'
   const recentLog = battle.log.slice(-5)
 
   return (
     <div className="battle">
       {/* 敵情報 */}
-      <div className="enemy-panel">
+      <div
+        className={`enemy-panel panel ${activeActor === 'enemy' ? 'acting' : ''} ${enemyTargetable ? 'targetable' : ''} ${shakes.enemy ? 'shake' : ''}`}
+        onClick={onEnemyTap}
+      >
         <div className="enemy-header">
           <span className="enemy-big-icon">{enemyDef.icon}</span>
           <div className="enemy-info">
@@ -105,11 +223,14 @@ export default function BattleScreen({ battle, setBattle, onExit }) {
         {recentLog.map((l, i) => (
           <div key={i} className={`log-line log-${l.kind}`}>{l.text}</div>
         ))}
-        <div className="log-hint">タップで全ログ表示 ▸</div>
+        <div className="log-hint">▸</div>
       </div>
 
       {/* 自分の情報 */}
-      <div className="player-panel">
+      <div
+        className={`player-panel panel ${activeActor === 'player' ? 'acting' : ''} ${playerTargetable ? 'targetable' : ''} ${shakes.player ? 'shake' : ''}`}
+        onClick={onPlayerTap}
+      >
         <div className="player-name">
           {p.name}
           <span className="elem-chip">{ELEMENTS[p.element].icon}{ELEMENTS[p.element].name}</span>
@@ -121,32 +242,45 @@ export default function BattleScreen({ battle, setBattle, onExit }) {
       </div>
 
       {/* 追加ターン表示 */}
-      {extraTurn && <div className="extra-banner">⚡ 追加ターン！もう一度行動できる</div>}
+      {extraTurn && !busy && <div className="extra-banner">⚡ 追加ターン！</div>}
 
-      {/* 行動ボタン */}
-      {!ended && (
+      {/* スキル一覧（スキルコマンドで開く） */}
+      {!ended && uiMode === 'skillList' && !targeting && (
         <div className="skill-area">
           <div className="skill-grid">
-            {actions.map((entry, i) => (
-              <button
-                key={i}
-                className={`skill-btn ${entry.skill.element ? 'elemental' : ''}`}
-                disabled={!entry.usable}
-                onClick={() => onSkillTap(entry)}
-              >
-                <span className="skill-name">{entry.displayName}</span>
-                <span className="skill-info">
-                  MP{entry.mpCost}{entry.skill.element ? ` ${ELEMENTS[entry.skill.element].icon}` : ''}
-                </span>
-                <span className="skill-desc">{entry.skill.desc}</span>
-              </button>
-            ))}
-            <button className="skill-btn basic" onClick={() => doAction({ type: 'basic' })}>
-              <span className="skill-name">{BATTLE_CONFIG.basicAttack.name}</span>
-              <span className="skill-info">MP0</span>
-              <span className="skill-desc">通常攻撃</span>
-            </button>
+            {actions.map((entry) => {
+              const elemClass = entry.skill.element ? `elem-${entry.skill.element}` : 'elem-none'
+              return (
+                <button
+                  key={entry.skill.id}
+                  className={`skill-btn ${elemClass} ${selectedSkillId === entry.skill.id ? 'selected' : ''}`}
+                  disabled={!entry.usable || busy}
+                  onClick={() => onSkillTap(entry)}
+                >
+                  <span className="skill-stars">{'★'.repeat(entry.skill.star)}</span>
+                  <span className="skill-name">{entry.displayName}</span>
+                  <span className="skill-info">
+                    MP{entry.mpCost}{entry.skill.element ? ` ${ELEMENTS[entry.skill.element].icon}` : ''}
+                  </span>
+                </button>
+              )
+            })}
           </div>
+          <button className="back-btn" onClick={() => { setUiMode('menu'); setSelectedSkillId(null) }}>もどる</button>
+        </div>
+      )}
+
+      {/* コマンド4ボタン（常時表示） */}
+      {!ended && (
+        <div className="command-area">
+          {targeting && <TargetSelector onCancel={() => setTargeting(null)} />}
+          <ActionMenu
+            disabled={busy || Boolean(targeting)}
+            onAttack={() => { resetSelection(); setTargeting({ kind: 'attack' }) }}
+            onSkills={() => { setUiMode(uiMode === 'skillList' ? 'menu' : 'skillList'); setSelectedSkillId(null) }}
+            onRecruit={() => { resetSelection(); setTargeting({ kind: 'recruit' }) }}
+            onEscape={onEscape}
+          />
         </div>
       )}
 
@@ -154,33 +288,52 @@ export default function BattleScreen({ battle, setBattle, onExit }) {
       {ended && (
         <div className="result-area">
           <div className={`result-banner ${battle.result}`}>
-            {battle.result === 'win' ? '🎉 勝利！' : '💀 敗北…'}
+            {battle.result === 'win' && '🎉 勝利！'}
+            {battle.result === 'lose' && '💀 敗北…'}
+            {battle.result === 'escape' && '🏃 逃げ出した'}
+            {battle.result === 'draw' && '⏱️ 引き分け'}
           </div>
           <button className="start-btn" onClick={onExit}>セットアップへ戻る</button>
         </div>
       )}
 
-      {/* 手動対象選択モーダル（解除・操作系） */}
-      {pendingSelect && (
-        <div className="modal-overlay" onClick={() => setPendingSelect(null)}>
+      {/* スキル詳細ポップアップ（戦闘中は「使う」付き） */}
+      {popupEntry && (
+        <SkillDetailPopup
+          skill={popupEntry.skill}
+          displayName={popupEntry.displayName}
+          mpCost={popupEntry.mpCost}
+          usable={popupEntry.usable && !busy}
+          onUse={() => onUseSkill(popupEntry)}
+          onClose={() => setPopupEntry(null)}
+        />
+      )}
+
+      {/* 弱体効果の手動選択（解除系・操作系） */}
+      {effectPick && (
+        <div className="modal-overlay" onClick={() => setEffectPick(null)}>
           <div className="modal-sheet" onClick={(ev) => ev.stopPropagation()}>
-            <h3>対象を選択</h3>
-            {pendingSelect.candidates.map((c) => (
+            <h3>対象の効果を選択</h3>
+            {effectPick.candidates.map((c) => (
               <button
                 key={c.key}
                 className="select-btn"
                 onClick={() => {
-                  doAction({ type: 'skill', skillRef: pendingSelect.ref, manualTargetKey: c.key })
-                  setPendingSelect(null)
+                  const { entry } = effectPick
+                  setEffectPick(null)
+                  runAction({ type: 'skill', skillRef: entry.ref, manualTargetKey: c.key })
                 }}
               >
                 {c.label}
               </button>
             ))}
-            <button className="select-btn cancel" onClick={() => setPendingSelect(null)}>キャンセル</button>
+            <button className="select-btn cancel" onClick={() => setEffectPick(null)}>キャンセル</button>
           </div>
         </div>
       )}
+
+      {/* 仲間にする等の通知トースト */}
+      {toast && <div className="toast">{toast}</div>}
 
       {/* ログ履歴ボトムシート */}
       {showLog && (
