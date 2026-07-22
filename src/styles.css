@@ -286,6 +286,8 @@ button:disabled { opacity: 0.4; cursor: default; }
 
 /* 用語の色付き強調（下線ではなく色分けでテキストに馴染ませる） */
 .gloss-term { font-weight: bold; cursor: pointer; }
+/* 属性名は色付けせずタップのみ可能（既存の属性UI表現と競合させない） */
+.gloss-term.gloss-plain { font-weight: inherit; color: inherit; }
 
 .back-btn {
   width: 100%;

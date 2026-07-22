@@ -16,6 +16,7 @@ import TargetSelector from './battle/TargetSelector.jsx'
 import StatusEffectShake from './battle/StatusEffectShake.jsx'
 import GlossarySummaryPopup from './common/GlossarySummaryPopup.jsx'
 import { STATUS_EFFECT_COLORS } from '../data/statusEffectColors.js'
+import { GLOSSARY_BY_TERM } from '../data/glossary.js'
 import { renderGlossaryText } from '../utils/glossaryText.js'
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
@@ -158,13 +159,13 @@ export default function BattleScreen({ battle, setBattle, onExit }) {
     const skill = entry.skill
     const targetsSelf = ['self', 'ally', 'allies'].includes(skill.target)
     if (!targetsSelf || skill.attack) {
-      // 敵対象スキル：対象選択（敵をタップ）へ
-      setTargeting({ kind: 'skill', entry })
+      // 敵対象スキル：対象選択へ（対象1体のみなら自動省略される）
+      startTargeting('skill', entry)
     } else if (entry.needsManualTarget) {
-      // 自分側対象で弱体効果の手動選択が必要（解除系）：自分をタップして選ぶ
-      setTargeting({ kind: 'skillAlly', entry })
+      // 自分側対象で弱体効果の手動選択が必要（解除系）：対象選択へ（1人なら自動省略）
+      startTargeting('skillAlly', entry)
     } else {
-      // 対象不要（自己バフ等）はそのまま行動確定
+      // 対象不要（自己バフ・全体対象等）はそのまま行動確定（選択省略の影響なし）
       runAction({ type: 'skill', skillRef: entry.ref })
     }
   }
@@ -182,25 +183,48 @@ export default function BattleScreen({ battle, setBattle, onExit }) {
     runAction({ type: 'skill', skillRef: entry.ref })
   }
 
-  // ===== 対象パネルのタップ処理 =====
-  const onEnemyTap = () => {
-    if (!targeting) return
-    if (targeting.kind === 'attack') {
+  // ===== 対象選択 =====
+  // 選択可能な対象を動的に列挙する
+  // ※1体前提のハードコーディング禁止：将来パーティ/複数敵でここが2体以上を
+  //   返すようになれば、選択画面（TargetSelector）が自動的に復活する
+  const getSelectableTargets = (side) =>
+    (side === 'ally' ? [battle.player] : [battle.enemy]).filter((c) => c.stats.hp > 0)
+
+  // 対象確定後の実行処理（手動タップ・自動選択の両方から呼ばれる）
+  const executeTargetedAction = (kind, entry) => {
+    if (kind === 'attack') {
       runAction({ type: 'normalAttack' })
-    } else if (targeting.kind === 'recruit') {
+    } else if (kind === 'recruit') {
       // 仲間にする（捕獲）はフェーズ3.5相当で実装予定。
       // 現状は対象選択フローの見た目のみで、捕獲判定ロジックには接続しない
       setTargeting(null)
       setToast('モンスター仲間システムは今後のフェーズで実装予定')
       setTimeout(() => setToast(null), 1800)
-    } else if (targeting.kind === 'skill') {
-      confirmSkillTarget(targeting.entry)
+    } else {
+      confirmSkillTarget(entry)
     }
+  }
+
+  // 対象選択の開始：対象が1体のみなら選択画面を省略して即確定する
+  const startTargeting = (kind, entry = null) => {
+    const side = kind === 'skillAlly' ? 'ally' : 'enemy'
+    const targets = getSelectableTargets(side)
+    if (targets.length === 1) {
+      executeTargetedAction(kind, entry) // 唯一の対象を自動選択（ハイライト演出なしで即実行）
+    } else {
+      setTargeting({ kind, entry }) // 2体以上は従来通り手動選択
+    }
+  }
+
+  // ===== 対象パネルのタップ処理（手動選択時） =====
+  const onEnemyTap = () => {
+    if (!targeting || targeting.kind === 'skillAlly') return
+    executeTargetedAction(targeting.kind, targeting.entry)
   }
 
   const onPlayerTap = () => {
     if (targeting?.kind === 'skillAlly') {
-      confirmSkillTarget(targeting.entry)
+      executeTargetedAction(targeting.kind, targeting.entry)
     }
   }
 
@@ -208,6 +232,14 @@ export default function BattleScreen({ battle, setBattle, onExit }) {
     escapeBattle(battle)
     resetSelection()
     refresh()
+  }
+
+  // 属性バッジのタップ：その属性名1つだけをまとめ用語ポップアップで表示する
+  const onElemChipTap = (ev, elementId) => {
+    if (busy || targeting) return // 対象選択中はパネルタップ（対象確定）を優先する
+    ev.stopPropagation()
+    const entry = GLOSSARY_BY_TERM[ELEMENTS[elementId].name]
+    if (entry) setGlossTerms([entry])
   }
 
   const enemyTargetable = targeting && ['attack', 'recruit', 'skill'].includes(targeting.kind)
@@ -227,7 +259,9 @@ export default function BattleScreen({ battle, setBattle, onExit }) {
             <div className="enemy-info">
               <div className="enemy-title">
                 {e.name}
-                <span className="elem-chip">{ELEMENTS[e.element].icon}{ELEMENTS[e.element].name}</span>
+                <span className="elem-chip" onClick={(ev) => onElemChipTap(ev, e.element)}>
+                  {ELEMENTS[e.element].icon}{ELEMENTS[e.element].name}
+                </span>
               </div>
               <Bar label="HP" value={e.stats.hp} max={e.stats.maxHp} color="#e05555" />
             </div>
@@ -252,7 +286,9 @@ export default function BattleScreen({ battle, setBattle, onExit }) {
         <StatusEffectShake color={seShakes.player}>
           <div className="player-name">
             {p.name}
-            <span className="elem-chip">{ELEMENTS[p.element].icon}{ELEMENTS[p.element].name}</span>
+            <span className="elem-chip" onClick={(ev) => onElemChipTap(ev, p.element)}>
+              {ELEMENTS[p.element].icon}{ELEMENTS[p.element].name}
+            </span>
             <span className="turn-label">ターン{battle.turn}</span>
           </div>
           <Bar label="HP" value={p.stats.hp} max={p.stats.maxHp} color="#4caf7d" />
@@ -300,9 +336,9 @@ export default function BattleScreen({ battle, setBattle, onExit }) {
           {targeting && <TargetSelector onCancel={() => setTargeting(null)} />}
           <ActionMenu
             disabled={busy || Boolean(targeting)}
-            onAttack={() => { resetSelection(); setTargeting({ kind: 'attack' }) }}
+            onAttack={() => { resetSelection(); startTargeting('attack') }}
             onSkills={() => { setUiMode(uiMode === 'skillList' ? 'menu' : 'skillList'); setSelectedSkillId(null) }}
-            onRecruit={() => { resetSelection(); setTargeting({ kind: 'recruit' }) }}
+            onRecruit={() => { resetSelection(); startTargeting('recruit') }}
             onEscape={onEscape}
           />
         </div>

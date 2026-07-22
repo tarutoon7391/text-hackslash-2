@@ -5,6 +5,7 @@
 // このポップアップより上のレイヤーに重なって開く（閉じてもこちらは維持される）
 import { useState } from 'react'
 import { ELEMENTS } from '../../data/elements.js'
+import { GLOSSARY_BY_TERM } from '../../data/glossary.js'
 import { renderGlossaryText } from '../../utils/glossaryText.js'
 import GlossarySummaryPopup from '../common/GlossarySummaryPopup.jsx'
 
@@ -22,7 +23,15 @@ export default function SkillDetailPopup({ skill, displayName, mpCost, usable = 
         <div className="popup-stars">{'★'.repeat(skill.star)}</div>
         <div className="popup-name">{displayName || skill.name}</div>
         <div className="popup-meta">
-          <span className={`elem-tag ${elemClass}`}>
+          {/* 属性ラベルもタップで用語詳細を開ける（その属性名1つだけを表示） */}
+          <span
+            className={`elem-tag ${elemClass}`}
+            onClick={() => {
+              if (!skill.element) return
+              const entry = GLOSSARY_BY_TERM[ELEMENTS[skill.element].name]
+              if (entry) setGlossTerms([entry])
+            }}
+          >
             {skill.element ? `${ELEMENTS[skill.element].icon}${ELEMENTS[skill.element].name}属性` : '無属性'}
           </span>
           <span className="popup-mp">MP {mpCost ?? skill.mp}</span>

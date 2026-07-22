@@ -15,4 +15,5 @@ export const CATEGORY_COLORS = {
   stat: '#8ecbff',    // ステータス系
   general: '#e8a0d0', // 総称（デバフ・弱体効果など）
   weapon: '#c8cbe0',  // 武器種
+  battle: '#ffcf8a',  // 戦闘用語（会心・スタック・確定先制など）
 }

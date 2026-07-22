@@ -19,18 +19,19 @@ export const GLOSSARY = [
     description: '会心（ダメージ2.0倍）が発生する確率。' },
 
   // ===== 属性 =====
+  // ※属性名はテキスト内で色付けせず、タップのみ可能（glossaryText.jsのplainCategories）
   { term: '火', category: '属性', color: ELEMENT_COLORS.fire,
-    description: '土に強く、水に弱い属性。状態異常「火傷」と結びつく。' },
+    description: '状態異常「火傷」と結びつく属性。土属性に1.5倍のダメージを与え、水属性から1.5倍のダメージを受ける。' },
   { term: '水', category: '属性', color: ELEMENT_COLORS.water,
-    description: '火に強く、雷に弱い属性。状態異常「凍結」と結びつく。' },
+    description: '状態異常「凍結」と結びつく属性。火属性に1.5倍のダメージを与え、雷属性から1.5倍のダメージを受ける。' },
   { term: '雷', category: '属性', color: ELEMENT_COLORS.thunder,
-    description: '水に強く、土に弱い属性。状態異常「感電」と結びつく。' },
+    description: '状態異常「感電」と結びつく属性。水属性に1.5倍のダメージを与え、土属性から1.5倍のダメージを受ける。' },
   { term: '土', category: '属性', color: ELEMENT_COLORS.earth,
-    description: '雷に強く、火に弱い属性。状態異常「混乱」と結びつく。' },
+    description: '状態異常「混乱」と結びつく属性。雷属性に1.5倍のダメージを与え、火属性から1.5倍のダメージを受ける。' },
   { term: '光', category: '属性', color: ELEMENT_COLORS.light,
-    description: '闇と互いに弱点を突き合う属性。状態異常の解除・耐性サポートが得意。' },
+    description: '状態異常の解除・耐性サポートが得意な属性。闇属性との間でお互いに1.5倍のダメージを与え合う。' },
   { term: '闇', category: '属性', color: ELEMENT_COLORS.dark,
-    description: '光と互いに弱点を突き合う属性。状態異常「呪い」と結びつく。' },
+    description: '状態異常「呪い」と結びつく属性。光属性との間でお互いに1.5倍のダメージを与え合う。' },
 
   // ===== 状態異常 =====
   { term: '火傷', category: '状態異常', color: ELEMENT_COLORS.fire,
@@ -44,7 +45,27 @@ export const GLOSSARY = [
   { term: '呪い', category: '状態異常', color: ELEMENT_COLORS.dark,
     description: '回復が無効になり、毎ターンデバフが蓄積していく。' },
 
+  // ===== 戦闘用語 =====
+  { term: '被弾直後', category: '戦闘用語', color: CATEGORY_COLORS.battle,
+    description: 'スキルの効果条件の一つ。直前のターンで自分が攻撃を受けていた場合に、追加効果や威力上昇が発生する。' },
+  { term: '会心', category: '戦闘用語', color: CATEGORY_COLORS.battle,
+    description: '攻撃が「会心（クリティカル）」になると、通常よりダメージが大きくなる。会心率の判定に成功すると発生する。' },
+  { term: '命中率', category: '戦闘用語', color: CATEGORY_COLORS.battle,
+    description: '攻撃やスキルが対象に当たる確率のこと。必中効果を持つスキルはこの判定を無視して必ず命中する。' },
+  { term: '被ダメ', category: '戦闘用語', color: CATEGORY_COLORS.battle,
+    description: '「被ダメージ」の略。攻撃や状態異常によって受けるダメージのこと。' },
+  { term: 'スタック', category: '戦闘用語', color: CATEGORY_COLORS.battle,
+    description: '状態異常の「効果の強さ」を表す数値。状態異常は「スタック数（強さ）×残りターン（持続時間）」の2軸で管理されており、スタックが多いほど1回あたりの効果が強くなる。スタックとターンは別々に管理される。' },
+  { term: '確定先制', category: '戦闘用語', color: CATEGORY_COLORS.battle,
+    description: 'このスキルを使うと、通常のSPD（素早さ）による行動順判定を無視して、必ず自分が先に行動できる効果。' },
+
   // ===== 総称 =====
+  { term: '回避', category: 'ステータス', color: CATEGORY_COLORS.stat,
+    description: '攻撃を受けた際に被弾を無効化できる確率のこと。回避+のエンチャントやバフで数値を上げられる。' },
+  { term: 'バフ', category: '総称', color: CATEGORY_COLORS.general,
+    description: 'ATK・DEF・SPD・会心率などのステータスを一時的に上昇させる効果の総称。デバフの逆。' },
+  { term: '攻撃バフ', category: '総称', color: CATEGORY_COLORS.general,
+    description: 'ATK（攻撃力）を一時的に上昇させるバフの一種。' },
   { term: 'デバフ', category: '総称', color: CATEGORY_COLORS.general,
     description: 'ATK-10%などのステータス低下効果。同じ効果は重ね掛けできず、再使用で上書きされる。' },
   { term: '弱体効果', category: '総称', color: CATEGORY_COLORS.general,

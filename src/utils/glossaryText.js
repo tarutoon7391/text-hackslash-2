@@ -11,8 +11,12 @@ import { GLOSSARY } from '../data/glossary.js'
 // 最長一致優先のためターム長の降順で並べておく
 const SORTED_GLOSSARY = [...GLOSSARY].sort((a, b) => b.term.length - a.term.length)
 
-export function renderGlossaryText(text, onTermsTap) {
+// options.plainCategories：色付けをスキップしつつタップは可能にするカテゴリのリスト
+// （既定で「属性」。属性名は既存の属性UI表現（バッジ・ボーダー色等）と競合するため
+//  テキスト内では強調色を付けず、タップだけできるようにする）
+export function renderGlossaryText(text, onTermsTap, options = {}) {
   if (!text) return { nodes: [], terms: [] }
+  const plainCategories = options.plainCategories ?? ['属性']
 
   const nodes = []
   const terms = [] // このテキストに含まれる用語（出現順・重複除去）
@@ -45,13 +49,15 @@ export function renderGlossaryText(text, onTermsTap) {
     if (matched) {
       flushBuffer()
       if (!terms.includes(matched)) terms.push(matched)
+      // plainCategories対象（属性名など）は強調色を付けずタップだけ可能にする
+      const isPlain = plainCategories.includes(matched.category)
       nodes.push(
         createElement(
           'span',
           {
             key: `gt-${keySeq++}`,
-            className: 'gloss-term',
-            style: { color: matched.color },
+            className: isPlain ? 'gloss-term gloss-plain' : 'gloss-term',
+            style: isPlain ? undefined : { color: matched.color },
             onClick: handleTap,
           },
           matched.term
