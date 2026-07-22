@@ -95,7 +95,13 @@ export default function App() {
         />
       )}
       {screen === 'loot' && lastLoot && (
-        <LootResultScreen item={lastLoot} floor={lootFloor} onNext={nextFloor} onLobby={toLobby} />
+        <LootResultScreen
+          item={lastLoot}
+          floor={lootFloor}
+          onNext={nextFloor}
+          onLobby={toLobby}
+          onOpenDictionary={() => setShowDictionary(true)}
+        />
       )}
       {/* 用語辞典（最前面のオーバーレイ。閉じれば元の画面にそのまま復帰） */}
       {showDictionary && <GlossaryDictionary onBack={() => setShowDictionary(false)} />}

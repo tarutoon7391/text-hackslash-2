@@ -1,12 +1,15 @@
 // 勝利リザルト画面：獲得したドロップ装備の内容を表示し、「次の階へ」or「ロビーに戻る」を選ぶ
+// スキル表示は戦闘画面と同じ仕組み（ItemSkillList→SkillDetailPopup→用語ポップアップ）を再利用
+// エンチャントもタップで詳細（ItemEnchantList→EnchantDetailPopup）
 import { ELEMENTS } from '../../data/elements.js'
 import { RARITIES } from '../../data/rarities.js'
 import { WEAPON_TYPES } from '../../data/weaponTypes.js'
-import { ALL_SKILLS_BY_ID } from '../../data/skills_elemental.js'
+import ItemSkillList from '../common/ItemSkillList.jsx'
+import ItemEnchantList from '../common/ItemEnchantList.jsx'
 
 const SLOT_LABELS = { weapon: '武器', armor: '防具', accessory: 'アクセサリー' }
 
-export default function LootResultScreen({ item, floor, onNext, onLobby }) {
+export default function LootResultScreen({ item, floor, onNext, onLobby, onOpenDictionary }) {
   const rarity = RARITIES[item.rarity]
   const elem = ELEMENTS[item.element]
 
@@ -29,31 +32,13 @@ export default function LootResultScreen({ item, floor, onNext, onLobby }) {
           {item.slot === 'accessory' && ` ／ HP+${item.hp}・MP+${item.mp}`}
         </div>
 
-        {/* スキル構成（武器のみ） */}
+        {/* スキル構成（武器のみ）：戦闘画面と同じスキルボタン＋詳細ポップアップを再利用 */}
         {item.slot === 'weapon' && (
-          <div className="loot-skills">
-            {item.skills.length === 0 && <span className="skill-chip empty">スキルなし</span>}
-            {item.skills.map((s, i) => {
-              const sk = ALL_SKILLS_BY_ID[s.skillId]
-              const elemClass = sk.element ? `elem-${sk.element}` : 'elem-none'
-              return (
-                <span key={i} className={`skill-chip ${elemClass}`}>
-                  {'★'.repeat(sk.star)} {sk.name}{s.plus > 0 ? `(+${s.plus})` : ''}
-                </span>
-              )
-            })}
-          </div>
+          <ItemSkillList skills={item.skills} onOpenDictionary={onOpenDictionary} />
         )}
 
-        {/* エンチャント構成 */}
-        <div className="loot-enchants">
-          {item.enchants.length === 0 && <span className="loot-enchant none">エンチャントなし</span>}
-          {item.enchants.map((en, i) => (
-            <span key={i} className={`loot-enchant ${en.kind}`}>
-              ✦ {en.name.replace('%', '')}{en.value}%
-            </span>
-          ))}
-        </div>
+        {/* エンチャント構成：タップで詳細 */}
+        <ItemEnchantList enchants={item.enchants} />
       </div>
 
       <div className="dungeon-actions">

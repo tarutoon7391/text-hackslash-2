@@ -525,7 +525,22 @@ button:disabled { opacity: 0.4; cursor: default; }
   border-radius: 6px;
   padding: 3px 7px;
   background: var(--panel2);
+  border: none;
+  min-height: 26px; /* チップ表示のためボタンの44px既定を上書き */
 }
+.loot-enchant.tappable { cursor: pointer; border: 1px solid var(--line); }
+
+/* エンチャント詳細ポップアップ */
+.enchant-popup { border-top-color: var(--accent); }
+.enchant-kind {
+  font-size: 11px;
+  font-weight: bold;
+  border-radius: 6px;
+  padding: 2px 8px;
+  background: var(--panel2);
+}
+.enchant-kind.unlimited { color: #ffcf8a; }
+.enchant-kind.capped { color: #8ecbff; }
 .loot-enchant.unlimited { color: #ffcf8a; } /* 青天井組 */
 .loot-enchant.capped { color: #8ecbff; }    /* 渋カーブ組 */
 .loot-enchant.none { color: var(--muted); }
