@@ -1,16 +1,16 @@
 // ロビー（拠点）画面：職業・武器・出発チェックポイントを選んでダンジョンへ出発する
 // 武器はテスト用サンプルに加えて、ドロップで入手したインベントリの武器も選べる
 // （本格的な抽出・移植UIはフェーズ3。ここでは「装備する武器を選ぶ」だけのシンプルな一覧）
-// スキル構成の確認はLootResultScreenと同じ共通コンポーネント
-// （ItemSkillList→SkillDetailPopup→用語ポップアップ）を再利用する
+// スキル/エンチャントはLootResultScreenと同じ共通チップコンポーネント
+// （SkillChipList／EnchantChipList→各詳細ポップアップ）で表示する
 import { useState, useMemo } from 'react'
 import { JOBS, JOB_IDS, calcJobStats } from '../data/jobs.js'
 import { WEAPON_TYPES } from '../data/weaponTypes.js'
 import { ELEMENTS } from '../data/elements.js'
 import { RARITIES } from '../data/rarities.js'
 import { SAMPLE_WEAPONS } from '../data/sampleWeapons.js'
-import ItemSkillList from './common/ItemSkillList.jsx'
-import ItemEnchantList from './common/ItemEnchantList.jsx'
+import SkillChipList from './common/SkillChipList.jsx'
+import EnchantChipList from './common/EnchantChipList.jsx'
 import CheckpointSelector from './dungeon/CheckpointSelector.jsx'
 
 export default function SetupScreen({ onDepart, checkpoints, inventory, initialJobId, initialWeaponId, onOpenDictionary }) {
@@ -49,10 +49,10 @@ export default function SetupScreen({ onDepart, checkpoints, inventory, initialJ
         <div className="weapon-meta">
           {elem.icon}{elem.name}属性 ／ ATK+{w.atk}
         </div>
-        {/* スキル構成（戦闘画面と同じ見た目・導線の共通コンポーネント） */}
-        <ItemSkillList skills={w.skills} onOpenDictionary={onOpenDictionary} />
+        {/* スキル構成（チップ形式。タップで詳細ポップアップ） */}
+        <SkillChipList skills={w.skills} onOpenDictionary={onOpenDictionary} />
         {/* エンチャント（ドロップ品のみ持つ。タップで詳細） */}
-        {w.enchants && w.enchants.length > 0 && <ItemEnchantList enchants={w.enchants} />}
+        {w.enchants && w.enchants.length > 0 && <EnchantChipList enchants={w.enchants} />}
       </div>
     )
   }

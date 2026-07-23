@@ -1,11 +1,11 @@
 // 勝利リザルト画面：獲得したドロップ装備の内容を表示し、「次の階へ」or「ロビーに戻る」を選ぶ
-// スキル表示は戦闘画面と同じ仕組み（ItemSkillList→SkillDetailPopup→用語ポップアップ）を再利用
-// エンチャントもタップで詳細（ItemEnchantList→EnchantDetailPopup）
+// スキル/エンチャントはロビーと同じ共通チップコンポーネントで表示する
+// （SkillChipList→SkillDetailPopup／EnchantChipList→EnchantDetailPopup）
 import { ELEMENTS } from '../../data/elements.js'
 import { RARITIES } from '../../data/rarities.js'
 import { WEAPON_TYPES } from '../../data/weaponTypes.js'
-import ItemSkillList from '../common/ItemSkillList.jsx'
-import ItemEnchantList from '../common/ItemEnchantList.jsx'
+import SkillChipList from '../common/SkillChipList.jsx'
+import EnchantChipList from '../common/EnchantChipList.jsx'
 
 const SLOT_LABELS = { weapon: '武器', armor: '防具', accessory: 'アクセサリー' }
 
@@ -32,13 +32,13 @@ export default function LootResultScreen({ item, floor, onNext, onLobby, onOpenD
           {item.slot === 'accessory' && ` ／ HP+${item.hp}・MP+${item.mp}`}
         </div>
 
-        {/* スキル構成（武器のみ）：戦闘画面と同じスキルボタン＋詳細ポップアップを再利用 */}
+        {/* スキル構成（武器のみ）：チップ形式。タップで詳細ポップアップ */}
         {item.slot === 'weapon' && (
-          <ItemSkillList skills={item.skills} onOpenDictionary={onOpenDictionary} />
+          <SkillChipList skills={item.skills} onOpenDictionary={onOpenDictionary} />
         )}
 
-        {/* エンチャント構成：タップで詳細 */}
-        <ItemEnchantList enchants={item.enchants} />
+        {/* エンチャント構成：チップ形式。タップで詳細 */}
+        <EnchantChipList enchants={item.enchants} />
       </div>
 
       <div className="dungeon-actions">
