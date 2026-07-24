@@ -1,6 +1,7 @@
 // アプリ全体の画面フロー管理
 // ロビー → ダンジョン → 戦闘 → 勝利ならドロップ結果 →（次の階 or ロビー）
 // 敗北・逃走は常にロビーへ戻る（GDD 14番）
+// ロビー ⇔ 装備管理（抽出・移植）はフェーズ3。装備スロットと抽出物はここで保持する
 // 用語辞典はオーバーレイとして重ねるので、どの画面の状態も失われない
 import { useState } from 'react'
 import SetupScreen from './components/SetupScreen.jsx'
@@ -8,24 +9,31 @@ import BattleScreen from './components/BattleScreen.jsx'
 import DungeonScreen from './components/dungeon/DungeonScreen.jsx'
 import LootResultScreen from './components/dungeon/LootResultScreen.jsx'
 import GlossaryDictionary from './pages/GlossaryDictionary.jsx'
+import EquipmentScreen from './pages/EquipmentScreen.jsx'
 import { createBattle } from './systems/battleEngine.js'
 import { useDungeonState, isBossFloor } from './systems/dungeonState.js'
 import { useInventoryState } from './systems/inventoryState.js'
+import { useEquipmentState } from './systems/equipmentState.js'
+import { useExtractInventoryState } from './systems/extractInventoryState.js'
 import { generateEnemy } from './systems/enemyGenerator.js'
 import { generateLoot } from './systems/lootSystem.js'
 
 export default function App() {
-  const [screen, setScreen] = useState('lobby') // lobby | dungeon | battle | loot
+  const [screen, setScreen] = useState('lobby') // lobby | equipment | dungeon | battle | loot
   const [battle, setBattle] = useState(null)
+  // 職業はロビーと装備管理画面で共有する（武器スロットの装備可否チェックに使う）
+  const [jobId, setJobId] = useState('swordsman')
   const [loadout, setLoadout] = useState(null)   // {jobId, weapon}
   const [lastLoot, setLastLoot] = useState(null) // 直近のドロップ（リザルト表示用）
   const [lootFloor, setLootFloor] = useState(null)
   const [showDictionary, setShowDictionary] = useState(false)
   const dungeon = useDungeonState()
   const inventory = useInventoryState()
+  const equipment = useEquipmentState()
+  const extractInv = useExtractInventoryState()
 
   // ロビーから出発
-  const depart = ({ jobId, weapon, startFloor }) => {
+  const depart = ({ weapon, startFloor }) => {
     setLoadout({ jobId, weapon })
     dungeon.enterDungeon(startFloor)
     setScreen('dungeon')
@@ -78,8 +86,22 @@ export default function App() {
           onDepart={depart}
           checkpoints={dungeon.checkpoints}
           inventory={inventory.items}
-          initialJobId={loadout?.jobId}
+          jobId={jobId}
+          onSelectJob={setJobId}
           initialWeaponId={loadout?.weapon?.id}
+          onOpenEquipment={() => setScreen('equipment')}
+          onOpenDictionary={() => setShowDictionary(true)}
+        />
+      )}
+      {screen === 'equipment' && (
+        <EquipmentScreen
+          jobId={jobId}
+          items={inventory.items}
+          equipment={equipment}
+          extractInv={extractInv}
+          onRemoveItem={inventory.removeItem}
+          onUpdateItem={inventory.updateItem}
+          onBack={() => setScreen('lobby')}
           onOpenDictionary={() => setShowDictionary(true)}
         />
       )}

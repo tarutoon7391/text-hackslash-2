@@ -1,6 +1,7 @@
 // ロビー（拠点）画面：職業・武器・出発チェックポイントを選んでダンジョンへ出発する
 // 武器はテスト用サンプルに加えて、ドロップで入手したインベントリの武器も選べる
-// （本格的な抽出・移植UIはフェーズ3。ここでは「装備する武器を選ぶ」だけのシンプルな一覧）
+// 装備の付け替え・抽出・移植は装備管理画面（EquipmentScreen）で行う
+// 職業は装備管理画面と共有するため親（App）が状態を持つ
 // スキル/エンチャントはLootResultScreenと同じ共通チップコンポーネント
 // （SkillChipList／EnchantChipList→各詳細ポップアップ）で表示する
 import { useState, useMemo } from 'react'
@@ -13,8 +14,7 @@ import SkillChipList from './common/SkillChipList.jsx'
 import EnchantChipList from './common/EnchantChipList.jsx'
 import CheckpointSelector from './dungeon/CheckpointSelector.jsx'
 
-export default function SetupScreen({ onDepart, checkpoints, inventory, initialJobId, initialWeaponId, onOpenDictionary }) {
-  const [jobId, setJobId] = useState(initialJobId || 'swordsman')
+export default function SetupScreen({ onDepart, checkpoints, inventory, jobId, onSelectJob, initialWeaponId, onOpenEquipment, onOpenDictionary }) {
   const [weaponId, setWeaponId] = useState(initialWeaponId || null)
   const [startFloor, setStartFloor] = useState(checkpoints[checkpoints.length - 1]) // 既定は最深チェックポイント
 
@@ -62,7 +62,8 @@ export default function SetupScreen({ onDepart, checkpoints, inventory, initialJ
       <h1 className="setup-title">⚔️ text-hackslash-2</h1>
       <p className="setup-sub">拠点ロビー</p>
 
-      {/* 用語辞典への導線 */}
+      {/* 装備管理・用語辞典への導線 */}
+      <button className="dict-link" onClick={onOpenEquipment}>🎒 装備・アイテム</button>
       <button className="dict-link" onClick={onOpenDictionary}>📖 用語辞典</button>
 
       <h2 className="section-label">職業</h2>
@@ -73,7 +74,7 @@ export default function SetupScreen({ onDepart, checkpoints, inventory, initialJ
             <button
               key={id}
               className={`job-card ${id === jobId ? 'selected' : ''}`}
-              onClick={() => { setJobId(id); setWeaponId(null) }}
+              onClick={() => { onSelectJob(id); setWeaponId(null) }}
             >
               <span className="job-icon">{j.icon}</span>
               <span className="job-name">{j.name}</span>
@@ -108,7 +109,7 @@ export default function SetupScreen({ onDepart, checkpoints, inventory, initialJ
       <button
         className="start-btn"
         disabled={!weapon}
-        onClick={() => onDepart({ jobId, weapon, startFloor })}
+        onClick={() => onDepart({ weapon, startFloor })}
       >
         🏰 {startFloor}階から出発！
       </button>

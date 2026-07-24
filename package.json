@@ -9,7 +9,9 @@
     "preview": "vite preview",
     "start": "node server.js",
     "smoke": "node test/battle-smoke.js",
-    "smoke:dungeon": "node test/dungeon-smoke.js"
+    "smoke:dungeon": "node test/dungeon-smoke.js",
+    "smoke:equipment": "node test/equipment-smoke.js",
+    "smoke:render": "node test/render-smoke.js"
   },
   "dependencies": {
     "express": "^4.19.2",

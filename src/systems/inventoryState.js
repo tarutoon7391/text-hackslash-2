@@ -8,5 +8,12 @@ export function useInventoryState() {
   // 新しいドロップ品を先頭に追加する
   const addItem = (item) => setItems((prev) => [item, ...prev])
 
-  return { items, addItem }
+  // アイテムを削除する（抽出で装備が破壊されたとき用）
+  const removeItem = (itemId) => setItems((prev) => prev.filter((it) => it.id !== itemId))
+
+  // アイテムを置き換える（移植でスキル/エンチャント枠が書き換わったとき用）
+  const updateItem = (nextItem) =>
+    setItems((prev) => prev.map((it) => (it.id === nextItem.id ? nextItem : it)))
+
+  return { items, addItem, removeItem, updateItem }
 }

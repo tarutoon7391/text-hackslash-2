@@ -658,3 +658,162 @@ button:disabled { opacity: 0.4; cursor: default; }
   line-height: 1.7;
   flex: 1;
 }
+
+/* ===== 装備管理画面（フェーズ3：付け替え・抽出・移植） ===== */
+.equip-screen {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+}
+.equip-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+}
+.equip-body {
+  flex: 1;
+  overflow-y: auto; /* 装備一覧は本質的に一覧性が必要なのでスクロール可（GDD 3番の例外） */
+  padding: 12px 12px calc(20px + env(safe-area-inset-bottom));
+}
+
+/* 現在の4スロット（2×2グリッド） */
+.equip-slots {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+.equip-slot {
+  background: var(--panel);
+  border: 2px solid var(--line);
+  border-radius: 10px;
+  padding: 6px 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  text-align: left;
+}
+.equip-slot.filled { border-color: var(--accent); }
+.equip-slot-label { font-size: 10px; color: var(--accent); }
+.equip-slot-item {
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+.equip-slot:not(.filled) .equip-slot-item { color: var(--muted); }
+
+.equip-stat-row { margin-top: 6px; }
+.equip-stat-owner { display: block; color: var(--text); font-weight: bold; margin-bottom: 2px; }
+
+/* 種別タブ */
+.equip-tabs { display: flex; gap: 6px; margin-top: 14px; }
+.equip-tab {
+  flex: 1;
+  background: var(--panel);
+  border: 2px solid var(--line);
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: bold;
+  color: var(--muted);
+}
+.equip-tab.selected { border-color: var(--accent); background: var(--panel2); color: var(--text); }
+
+.equip-list { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+.equip-badge {
+  font-size: 9px;
+  color: #1a1500;
+  background: var(--accent);
+  border-radius: 5px;
+  padding: 1px 5px;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+.equip-hint { font-size: 11px; color: var(--muted); padding: 8px 2px; line-height: 1.6; }
+
+/* アイテム詳細（全画面オーバーレイ。チップ詳細ポップアップz:20や移植シートz:10より下） */
+.equip-detail {
+  position: fixed;
+  inset: 0;
+  background: var(--bg);
+  z-index: 8;
+  max-width: 480px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left);
+}
+.equip-detail-body {
+  flex: 1;
+  overflow-y: auto; /* 枠が多い装備でもはみ出さないようスクロール可 */
+  padding: 12px 12px calc(20px + env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* 装備・抽出・移植のアクションボタン */
+.equip-actions, .frame-actions { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.equip-action-btn {
+  background: var(--panel2);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 12px;
+  font-size: 13px;
+  font-weight: bold;
+  width: 100%;
+}
+.equip-action-btn.equipped { border-color: var(--accent); color: var(--accent); }
+.equip-action-btn.extract { border-color: #a06bff; color: #d0b0ff; }
+.equip-block-note { font-size: 11px; color: var(--danger); padding: 2px; }
+
+/* 空き枠チップ（枠選択モード）：破線で「枠だけある」感を出す */
+.skill-chip.frame-empty {
+  border: 1px dashed var(--line);
+  border-left: 3px dashed var(--line);
+  background: transparent;
+}
+.skill-chip.frame-empty.selected { outline: 2px solid #fff; outline-offset: -1px; }
+
+/* 抽出確認ダイアログ */
+.extract-popup { border-top-color: #a06bff; }
+.extract-target-name {
+  font-size: 14px;
+  font-weight: bold;
+  background: var(--panel2);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+.extract-warning {
+  font-size: 12px;
+  line-height: 1.6;
+  color: #ffb0a0;
+  background: #4a2530;
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+.use-btn.danger { background: var(--danger); color: #fff; }
+
+/* 移植セレクター（ボトムシート内） */
+.transplant-note { font-size: 11px; color: var(--muted); line-height: 1.6; }
+.transplant-empty { font-size: 12px; color: var(--muted); padding: 12px 4px; line-height: 1.6; }
+.transplant-list {
+  max-height: 40dvh;
+  overflow-y: auto; /* 抽出物が多い場合のみ内部スクロール（一覧性が必要な部分） */
+  padding: 2px 0;
+}
+.transplant-error {
+  font-size: 12px;
+  color: #ffb0a0;
+  background: #4a2530;
+  border-radius: 8px;
+  padding: 8px 10px;
+  line-height: 1.5;
+}
+
+/* エラートースト（通常トーストの赤枠版） */
+.toast.toast-error { border-color: var(--danger); color: #ffb0a0; }
