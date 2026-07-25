@@ -5,6 +5,7 @@
 import { useState } from 'react'
 import { JOBS } from '../data/jobs.js'
 import { WEAPON_TYPES } from '../data/weaponTypes.js'
+import { STARTER_ARMOR_ID, starterWeaponIdFor } from '../data/starterEquipment.js'
 
 // 4スロットの定義（key=スロット識別子、accepts=受け入れる部位）
 export const EQUIP_SLOTS = [
@@ -70,16 +71,57 @@ export function calcTotalStats({ baseStats, slots, itemsById }) {
   return total
 }
 
+// 職業選択時のスロット遷移（フェーズ3パート3。純関数＝スモークテスト対象）
+// - 初回（hasEquippedBefore=false＝まだ一度も装備したことがない）：
+//   その職業のdefaultWeaponTypeに一致する初期武器＋初期防具を自動装備し、フラグを立てる
+// - 2回目以降（転職）：防具・アクセサリー2枠には一切触れない。
+//   武器のみ互換性チェックし、新しい職業で装備不可なら空にする
+//   （スターター武器等への自動差し替えはしない。選び直しはEquipmentScreenから）
+// 戻り値は { slots, hasEquippedBefore } の新しい状態
+export function applyJobChangeToSlots({ slots, jobId, items, hasEquippedBefore }) {
+  const job = JOBS[jobId]
+
+  if (!hasEquippedBefore) {
+    // 本当の初回：職業デフォルトの初期武器＋初期防具を自動装備
+    // （初期装備は通常ドロップと同じデータ構造でインベントリに入っている前提。
+    //   万一見つからない場合はそのスロットに触らない）
+    const weapon = items.find((it) => it.id === starterWeaponIdFor(job.defaultWeaponType))
+    const armor = items.find((it) => it.id === STARTER_ARMOR_ID)
+    return {
+      slots: {
+        ...slots,
+        weapon: weapon ? weapon.id : slots.weapon,
+        armor: armor ? armor.id : slots.armor,
+      },
+      hasEquippedBefore: true,
+    }
+  }
+
+  // 転職：武器の互換性チェックのみ
+  if (!slots.weapon) return { slots, hasEquippedBefore }
+  const current = items.find((it) => it.id === slots.weapon)
+  const compatible = Boolean(current) && job.equipableWeaponTypes.includes(current.weaponType)
+  return {
+    slots: compatible ? slots : { ...slots, weapon: null },
+    hasEquippedBefore,
+  }
+}
+
 const EMPTY_SLOTS = { weapon: null, armor: null, accessory1: null, accessory2: null }
 
 export function useEquipmentState() {
   const [slots, setSlots] = useState(EMPTY_SLOTS)
+  // 初回装備フラグ：一度でも装備（手動装備 or 初回自動装備）したらtrue
+  // falseのうちに職業を選ぶと初期装備の自動装備が走る（applyJobChangeToSlots）
+  const [hasEquippedBefore, setHasEquippedBefore] = useState(false)
 
   // 装備する。武器種制限に違反する場合はエラーメッセージを返して何もしない
   // 同じアイテムが別スロットに装備済みなら外してから付け替える（アクセ1⇔2の移動用）
   const equip = ({ jobId, slotKey, item }) => {
     const error = checkEquip({ jobId, slotKey, item })
     if (error) return error
+    // 手動で装備した時点で「初回」は終わり（以降の職業選択で自動装備に上書きされない）
+    setHasEquippedBefore(true)
     setSlots((prev) => {
       const next = { ...prev }
       for (const key of Object.keys(next)) {
@@ -116,5 +158,13 @@ export function useEquipmentState() {
     return null
   }
 
-  return { slots, equip, unequip, clearItem, equippedSlotOf }
+  // 職業選択時の処理（初回＝自動装備／転職＝武器の互換性チェックのみ）
+  // 実ロジックは純関数applyJobChangeToSlotsに委譲する
+  const applyJobChange = ({ jobId, items }) => {
+    const next = applyJobChangeToSlots({ slots, jobId, items, hasEquippedBefore })
+    setSlots(next.slots)
+    setHasEquippedBefore(next.hasEquippedBefore)
+  }
+
+  return { slots, hasEquippedBefore, equip, unequip, clearItem, equippedSlotOf, applyJobChange }
 }

@@ -83,8 +83,12 @@ export default function SetupScreen({ onDepart, checkpoints, items, equipment, j
       >
         🏰 {startFloor}階から出発！
       </button>
-      {!weapon && (
-        <div className="depart-note">⚠️ 武器を装備していない。「現在の装備」から装備しよう</div>
+      {/* 未装備時の案内：初回は職業タップで自動装備、転職後は装備画面へ誘導 */}
+      {!weapon && !equipment.hasEquippedBefore && (
+        <div className="depart-note">⚠️ 職業を選ぶと初期装備が自動で装備される</div>
+      )}
+      {!weapon && equipment.hasEquippedBefore && (
+        <div className="depart-note">⚠️ 武器が未装備。「現在の装備」か下の「装備」タブから装備しよう</div>
       )}
       {jobBlocked && (
         <div className="depart-note">

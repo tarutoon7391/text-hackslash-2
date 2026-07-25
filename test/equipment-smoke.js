@@ -4,15 +4,16 @@
 // 3. 移植バリデーション（渋カーブ組の同種重複＝GDD 10.3／スキル重複）
 // 4. 移植の適用（上書き・空き枠追加・元アイテム非破壊）
 // 5. 初期装備（データ構造・性能・通常ドロップと同じ扱いで装備/移植できること）
+// 6. 職業選択時の装備遷移（初回自動装備／転職時の武器互換性チェック）
 
-import { checkEquip, calcTotalStats } from '../src/systems/equipmentState.js'
+import { checkEquip, calcTotalStats, applyJobChangeToSlots } from '../src/systems/equipmentState.js'
 import {
   validateEnchantTransplant,
   validateSkillTransplant,
   applySkillTransplant,
   applyEnchantTransplant,
 } from '../src/systems/extractInventoryState.js'
-import { calcJobStats } from '../src/data/jobs.js'
+import { JOBS, JOB_IDS, calcJobStats } from '../src/data/jobs.js'
 import { createStarterEquipment } from '../src/data/starterEquipment.js'
 import { RARITIES } from '../src/data/rarities.js'
 import { ARMOR_TEMPLATE } from '../src/data/itemTemplates.js'
@@ -171,6 +172,56 @@ console.log('\n====== 5. 初期装備（スターター一式） ======')
   check('createStarterEquipmentは毎回新規オブジェクトを返す',
     fresh !== sword && fresh.skills[0].skillId === sword.skills[0].skillId &&
     fresh.skills[0].skillId !== bowSkill.skillId)
+}
+
+// ============================================================
+console.log('\n====== 6. 職業選択時の装備遷移（フェーズ3パート3） ======')
+{
+  // 全職業にdefaultWeaponTypeがあり、必ず自分の装備可能リストに含まれる（データ整合性）
+  check('全職業のdefaultWeaponTypeが装備可能リスト内にある',
+    JOB_IDS.every((id) => JOBS[id].equipableWeaponTypes.includes(JOBS[id].defaultWeaponType)))
+
+  const items = createStarterEquipment()
+  const empty = { weapon: null, armor: null, accessory1: null, accessory2: null }
+
+  // --- 初回：職業デフォルトの初期武器＋初期防具が自動装備される ---
+  const first = applyJobChangeToSlots({ slots: empty, jobId: 'swordsman', items, hasEquippedBefore: false })
+  check('初回（剣士）：初期剣が武器スロットに入る', first.slots.weapon === 'starter_sword')
+  check('初回（剣士）：初期防具が防具スロットに入る', first.slots.armor === 'starter_armor')
+  check('初回：完了後にフラグがtrueになる', first.hasEquippedBefore === true)
+
+  const firstMage = applyJobChangeToSlots({ slots: empty, jobId: 'mage', items, hasEquippedBefore: false })
+  check('初回（魔導士）：デフォルトの杖が入る', firstMage.slots.weapon === 'starter_staff')
+  const firstBrawler = applyJobChangeToSlots({ slots: empty, jobId: 'brawler', items, hasEquippedBefore: false })
+  check('初回（闘士）：デフォルトの大剣が入る', firstBrawler.slots.weapon === 'starter_greatsword')
+
+  // --- 転職：防具・アクセは一切変更されない ---
+  // 剣を装備した剣士がアクセ2枠も埋めた状態を想定
+  const geared = { weapon: 'starter_sword', armor: 'starter_armor', accessory1: 'acc_a', accessory2: 'acc_b' }
+  const gearedItems = [
+    ...items,
+    { id: 'acc_a', slot: 'accessory', weaponType: null },
+    { id: 'acc_b', slot: 'accessory', weaponType: null },
+  ]
+
+  // 互換あり：剣士→聖職者（聖職者は剣を装備できる）→ 武器もそのまま
+  const toCleric = applyJobChangeToSlots({ slots: geared, jobId: 'cleric', items: gearedItems, hasEquippedBefore: true })
+  check('転職（互換あり）：武器はそのまま維持', toCleric.slots.weapon === 'starter_sword')
+  check('転職（互換あり）：防具・アクセも維持',
+    toCleric.slots.armor === 'starter_armor' && toCleric.slots.accessory1 === 'acc_a' && toCleric.slots.accessory2 === 'acc_b')
+
+  // 互換なし：剣士→魔導士（剣は装備不可）→ 武器スロットだけ空になる
+  const toMage = applyJobChangeToSlots({ slots: geared, jobId: 'mage', items: gearedItems, hasEquippedBefore: true })
+  check('転職（互換なし）：武器スロットだけ空になる', toMage.slots.weapon === null)
+  check('転職（互換なし）：防具・アクセは一切変更されない',
+    toMage.slots.armor === 'starter_armor' && toMage.slots.accessory1 === 'acc_a' && toMage.slots.accessory2 === 'acc_b')
+  check('転職ではフラグが変化しない', toMage.hasEquippedBefore === true)
+
+  // 武器が空のまま更に転職しても、スターター武器等への自動再装備はされない
+  const again = applyJobChangeToSlots({ slots: toMage.slots, jobId: 'hunter', items: gearedItems, hasEquippedBefore: true })
+  check('転職（武器空のまま）：自動再装備されない', again.slots.weapon === null)
+  check('転職（武器空のまま）：防具・アクセは維持',
+    again.slots.armor === 'starter_armor' && again.slots.accessory1 === 'acc_a' && again.slots.accessory2 === 'acc_b')
 }
 
 // ============================================================

@@ -41,6 +41,14 @@ export default function App() {
     if (inventory.items.length === 0) inventory.addItems(createStarterEquipment())
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // 職業選択（フェーズ3パート3）
+  // 初回（まだ何も装備したことがない）：その職業の初期武器＋初期防具を自動装備
+  // 転職：防具・アクセはそのまま。武器のみ互換性チェック（装備不可なら空にする）
+  const selectJob = (id) => {
+    setJobId(id)
+    equipment.applyJobChange({ jobId: id, items: inventory.items })
+  }
+
   // ロビーから出発（武器は装備スロットのものをSetupScreen経由で受け取る）
   const depart = ({ weapon, startFloor }) => {
     setLoadout({ jobId, weapon })
@@ -114,7 +122,7 @@ export default function App() {
             items={inventory.items}
             equipment={equipment}
             jobId={jobId}
-            onSelectJob={setJobId}
+            onSelectJob={selectJob}
             onOpenEquipment={() => setScreen('equipment')}
           />
         )}

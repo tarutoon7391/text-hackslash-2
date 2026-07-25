@@ -41,7 +41,8 @@ try {
     ['ダンジョン', '装備', '辞典'].every((label) => lobbyHtml.includes(label)))
   check('現在の装備（簡易表示）がある', lobbyHtml.includes('現在の装備'))
   check('テスト用サンプル武器の表示が無い', !lobbyHtml.includes('テスト用サンプル'))
-  check('未装備時は出発できない注意が出る', lobbyHtml.includes('武器を装備していない'))
+  // SSRの初期状態＝未装備・初回フラグfalseなので「職業タップで自動装備」の案内が出る
+  check('初回は職業選択で自動装備される案内が出る', lobbyHtml.includes('職業を選ぶと初期装備が自動で装備される'))
 
   // ============================================================
   console.log('\n====== 2. 装備管理画面 ======')

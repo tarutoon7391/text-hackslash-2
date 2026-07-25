@@ -2,6 +2,7 @@
 // パッシブなし。ステータス傾向係数と装備可能武器種で差別化
 // 傾向係数：低=0.8／中=1.0／高=1.25（実装後調整）
 // baseStats：係数1.0のときの基準値（Lv1想定、実装後調整）
+// defaultWeaponType：初回の職業選択時に自動装備される初期武器の武器種（フェーズ3パート3）
 
 export const BASE_STATS = {
   hp: 100,
@@ -25,6 +26,7 @@ export const JOBS = {
     name: '剣士',
     icon: '🗡️',
     equipableWeaponTypes: ['sword', 'greatsword'],
+    defaultWeaponType: 'sword',
     tendencies: { hp: 'mid', mp: 'low', atk: 'mid', def: 'mid', spd: 'mid', crit: 'mid' },
   },
   mage: {
@@ -32,6 +34,7 @@ export const JOBS = {
     name: '魔導士',
     icon: '🔮',
     equipableWeaponTypes: ['staff', 'tome'],
+    defaultWeaponType: 'staff',
     tendencies: { hp: 'low', mp: 'high', atk: 'mid', def: 'low', spd: 'low', crit: 'mid' },
   },
   hunter: {
@@ -39,6 +42,7 @@ export const JOBS = {
     name: '狩人',
     icon: '🏹',
     equipableWeaponTypes: ['bow', 'dualblades'],
+    defaultWeaponType: 'bow',
     tendencies: { hp: 'mid', mp: 'low', atk: 'mid', def: 'low', spd: 'high', crit: 'high' },
   },
   cleric: {
@@ -46,6 +50,7 @@ export const JOBS = {
     name: '聖職者',
     icon: '✨',
     equipableWeaponTypes: ['staff', 'sword'],
+    defaultWeaponType: 'staff',
     tendencies: { hp: 'mid', mp: 'mid', atk: 'low', def: 'mid', spd: 'mid', crit: 'low' },
   },
   brawler: {
@@ -53,6 +58,7 @@ export const JOBS = {
     name: '闘士',
     icon: '💪',
     equipableWeaponTypes: ['greatsword', 'dualblades'],
+    defaultWeaponType: 'greatsword',
     tendencies: { hp: 'high', mp: 'low', atk: 'high', def: 'mid', spd: 'low', crit: 'low' },
   },
 }

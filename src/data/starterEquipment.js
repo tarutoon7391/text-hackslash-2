@@ -17,6 +17,12 @@ export const STARTER_RULES = {
   armorHp: 4,    // コモンのhpRange[5,10]より低い
 }
 
+// 初期装備の固定ID（初回の職業選択時の自動装備で参照する。フェーズ3パート3）
+export const STARTER_ARMOR_ID = 'starter_armor'
+export function starterWeaponIdFor(weaponType) {
+  return `starter_${weaponType}`
+}
+
 // 武器6種の名前（初期装備らしい素朴なもの）
 const STARTER_WEAPON_NAMES = {
   sword: 'なめし革の剣',
@@ -39,7 +45,7 @@ export function createStarterEquipment() {
   const weapons = WEAPON_TYPE_IDS.map((weaponType) => {
     const skillId = starterSkillIdFor(weaponType)
     return {
-      id: `starter_${weaponType}`,
+      id: starterWeaponIdFor(weaponType),
       slot: 'weapon',
       name: STARTER_WEAPON_NAMES[weaponType],
       weaponType,
@@ -53,7 +59,7 @@ export function createStarterEquipment() {
   })
 
   const armor = {
-    id: 'starter_armor',
+    id: STARTER_ARMOR_ID,
     slot: 'armor',
     name: 'なめし革の胴着',
     icon: '🥋',
