@@ -33,12 +33,52 @@ html, body {
   -webkit-tap-highlight-color: transparent;
 }
 
+html, body { height: 100%; }
+
+/* 高さは100dvh固定。下セーフエリアはフッターナビ（無い戦闘画面は画面自身）が持つ */
 #root {
   max-width: 480px;
   margin: 0 auto;
-  min-height: 100dvh;
-  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  height: 100dvh;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left);
 }
+
+/* ===== アプリ全体シェル（メイン領域＋フッターナビの縦2段） ===== */
+.app-shell {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+/* メイン領域：残り高さ全部。各画面はこの中に収める（overflow hiddenではみ出しを許さない） */
+.app-main {
+  flex: 1;
+  min-height: 0;
+  position: relative; /* 全画面オーバーレイ（用語辞典・アイテム詳細）の基準 */
+  overflow: hidden;
+}
+
+/* ===== フッター固定ナビ（戦闘画面のみ非表示＝App側で出し分け） ===== */
+.footer-nav {
+  flex-shrink: 0;
+  display: flex;
+  background: var(--panel);
+  border-top: 1px solid var(--line);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.footer-tab {
+  flex: 1;
+  min-height: 54px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: bold;
+}
+.footer-tab.active { color: var(--accent); }
+.footer-tab-icon { font-size: 18px; }
 
 button {
   font-family: inherit;
@@ -50,11 +90,16 @@ button {
 }
 button:disabled { opacity: 0.4; cursor: default; }
 
-/* ===== セットアップ画面 ===== */
-.setup { padding: 16px 12px 32px; }
-.setup-title { font-size: 22px; text-align: center; margin-top: 8px; }
-.setup-sub { text-align: center; color: var(--muted); font-size: 12px; margin: 4px 0 12px; }
-.section-label { font-size: 14px; color: var(--accent); margin: 16px 0 8px; }
+/* ===== セットアップ画面（ロビー） ===== */
+/* 通常は1画面に収まる想定。チェックポイント解放が進んで縦に伸びた場合のみスクロール */
+.setup {
+  height: 100%;
+  overflow-y: auto;
+  padding: 10px 12px 16px;
+}
+.setup-title { font-size: 18px; text-align: center; margin-top: 2px; }
+.setup-sub { text-align: center; color: var(--muted); font-size: 11px; margin: 2px 0 8px; }
+.section-label { font-size: 13px; color: var(--accent); margin: 12px 0 6px; }
 
 .job-grid, .enemy-grid {
   display: grid;
@@ -71,7 +116,7 @@ button:disabled { opacity: 0.4; cursor: default; }
   align-items: center;
   gap: 2px;
 }
-.job-card.selected, .enemy-card.selected, .weapon-card.selected {
+.job-card.selected, .enemy-card.selected {
   border-color: var(--accent);
   background: var(--panel2);
 }
@@ -88,7 +133,37 @@ button:disabled { opacity: 0.4; cursor: default; }
   margin-top: 8px;
 }
 
-.weapon-list { display: flex; flex-direction: column; gap: 8px; }
+/* ロビーの「現在の装備」簡易表示（名前・レア度のみ。タップで装備管理画面へ） */
+.lobby-equip-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+.lobby-equip-slot {
+  background: var(--panel);
+  border: 2px solid var(--line);
+  border-radius: 10px;
+  padding: 5px 8px;
+  min-height: 52px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  text-align: left;
+}
+.lobby-equip-slot.filled { border-color: var(--accent); }
+.lobby-equip-slot:not(.filled) .equip-slot-item { color: var(--muted); }
+.lobby-equip-rarity { font-size: 9px; }
+
+/* 出発できない理由の注意書き */
+.depart-note {
+  font-size: 11px;
+  color: #ffb0a0;
+  text-align: center;
+  margin-top: 8px;
+  line-height: 1.6;
+}
+
 .weapon-card {
   background: var(--panel);
   border: 2px solid var(--line);
@@ -136,14 +211,22 @@ button:disabled { opacity: 0.4; cursor: default; }
   padding: 14px;
 }
 
-/* ===== 戦闘画面（1画面完結） ===== */
+/* ===== 戦闘画面（1画面完結・スクロールなし） =====
+   フッターナビ非表示のためメイン領域全体を使う。下セーフエリアは自前で確保。
+   高さの可変分は直近ログ欄（flex:1）が吸収し、パネル・コマンドは絶対に潰れない */
 .battle {
   display: flex;
   flex-direction: column;
-  min-height: 100dvh;
+  height: 100%;
+  overflow: hidden;
   padding: 10px 10px calc(10px + env(safe-area-inset-bottom));
   gap: 8px;
 }
+/* 敵・自分パネルとコマンド類は高さ固定（縮ませない） */
+.battle > .panel,
+.battle > .command-area,
+.battle > .result-area,
+.battle > .extra-banner { flex-shrink: 0; }
 
 .panel {
   background: var(--panel);
@@ -225,13 +308,20 @@ button:disabled { opacity: 0.4; cursor: default; }
 .effect-chip.debuff { background: #45304d; }
 .effect-chip.buff { background: #24463a; }
 
+/* 直近ログ：戦闘画面の高さ調整弁。余った高さを全部使い、足りなければ縮む
+   （縮んだ場合は最新行が見えるよう下寄せで上の行から隠れる） */
 .log-recent {
   background: var(--panel);
   border-radius: 12px;
   padding: 8px 10px;
   font-size: 11px;
   line-height: 1.6;
-  min-height: 84px;
+  flex: 1;
+  min-height: 48px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
 }
 .log-hint { color: var(--muted); font-size: 10px; text-align: right; }
 .log-line { color: var(--text); white-space: pre-wrap; }
@@ -256,9 +346,10 @@ button:disabled { opacity: 0.4; cursor: default; }
 }
 
 /* ===== スキル一覧 ===== */
+/* 画面が狭いときはflex縮小で譲り、あふれた分は内部スクロール（画面全体は固定のまま） */
 .skill-area {
-  max-height: 34dvh;
-  overflow-y: auto; /* スキル数が多い場合のみ内部スクロール */
+  max-height: 30dvh;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -447,13 +538,15 @@ button:disabled { opacity: 0.4; cursor: default; }
 .se-popup-stat b { font-size: 14px; }
 .se-popup-desc { font-size: 12px; line-height: 1.6; }
 
-/* ===== ダンジョン画面（1画面完結） ===== */
+/* ===== ダンジョン画面（1画面完結・スクロールなし） =====
+   フッターナビ分を除いたメイン領域内に収める（下セーフエリアはフッターが持つ） */
 .dungeon {
   display: flex;
   flex-direction: column;
-  min-height: 100dvh;
-  padding: 24px 16px calc(16px + env(safe-area-inset-bottom));
-  gap: 16px;
+  height: 100%;
+  overflow: hidden;
+  padding: 16px;
+  gap: 14px;
   justify-content: center;
 }
 .dungeon-zone {
@@ -497,14 +590,17 @@ button:disabled { opacity: 0.4; cursor: default; }
 .cp-floor { font-size: 14px; font-weight: bold; }
 .cp-zone { font-size: 10px; color: var(--muted); }
 
-/* ===== ドロップリザルト画面 ===== */
+/* ===== ドロップリザルト画面 =====
+   基本は1画面完結の中央寄せ。レジェンダリー等でカードが縦に伸びて
+   収まらないときだけスクロール（safe centerで先頭が切れないようにする） */
 .loot-screen {
   display: flex;
   flex-direction: column;
-  min-height: 100dvh;
-  padding: 24px 16px calc(16px + env(safe-area-inset-bottom));
+  height: 100%;
+  overflow-y: auto;
+  padding: 16px;
   gap: 12px;
-  justify-content: center;
+  justify-content: safe center;
 }
 .loot-banner {
   text-align: center;
@@ -535,27 +631,17 @@ button:disabled { opacity: 0.4; cursor: default; }
 }
 .enchant-kind.unlimited { color: #ffcf8a; }
 .enchant-kind.capped { color: #8ecbff; }
-.drop-tag {
-  font-size: 9px;
-  color: var(--accent);
-  background: var(--panel2);
-  border-radius: 5px;
-  padding: 1px 5px;
-  margin-left: 6px;
-  vertical-align: middle;
-}
 
-/* ===== 用語辞典画面（最前面オーバーレイ。元の画面の状態は保持される） ===== */
+/* ===== 用語辞典画面（メイン領域内の最前面オーバーレイ。元の画面の状態は保持される） =====
+   app-main基準のabsoluteなのでフッターナビは隠さない
+   （フッターの無い戦闘画面ではメイン領域＝全画面なので従来通り全面に出る） */
 .dict-screen {
-  position: fixed;
+  position: absolute;
   inset: 0;
   background: var(--bg);
   z-index: 50; /* 用語ポップアップ(z:40)より上の最前面 */
-  max-width: 480px;
-  margin: 0 auto;
   display: flex;
   flex-direction: column;
-  padding: env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left);
 }
 .dict-header {
   display: flex;
@@ -663,7 +749,7 @@ button:disabled { opacity: 0.4; cursor: default; }
 .equip-screen {
   display: flex;
   flex-direction: column;
-  min-height: 100dvh;
+  height: 100%;
 }
 .equip-header {
   display: flex;
@@ -675,8 +761,9 @@ button:disabled { opacity: 0.4; cursor: default; }
 }
 .equip-body {
   flex: 1;
+  min-height: 0;
   overflow-y: auto; /* 装備一覧は本質的に一覧性が必要なのでスクロール可（GDD 3番の例外） */
-  padding: 12px 12px calc(20px + env(safe-area-inset-bottom));
+  padding: 12px 12px 20px;
 }
 
 /* 現在の4スロット（2×2グリッド） */
@@ -735,22 +822,21 @@ button:disabled { opacity: 0.4; cursor: default; }
 }
 .equip-hint { font-size: 11px; color: var(--muted); padding: 8px 2px; line-height: 1.6; }
 
-/* アイテム詳細（全画面オーバーレイ。チップ詳細ポップアップz:20や移植シートz:10より下） */
+/* アイテム詳細（メイン領域内オーバーレイ。チップ詳細ポップアップz:20や移植シートz:10より下。
+   app-main基準のabsoluteなのでフッターナビは隠さない） */
 .equip-detail {
-  position: fixed;
+  position: absolute;
   inset: 0;
   background: var(--bg);
   z-index: 8;
-  max-width: 480px;
-  margin: 0 auto;
   display: flex;
   flex-direction: column;
-  padding: env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left);
 }
 .equip-detail-body {
   flex: 1;
+  min-height: 0;
   overflow-y: auto; /* 枠が多い装備でもはみ出さないようスクロール可 */
-  padding: 12px 12px calc(20px + env(safe-area-inset-bottom));
+  padding: 12px 12px 20px;
   display: flex;
   flex-direction: column;
   gap: 8px;

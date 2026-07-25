@@ -10,7 +10,7 @@ import { generateEnemy } from '../src/systems/enemyGenerator.js'
 import { generateLoot } from '../src/systems/lootSystem.js'
 import { createSeededRng } from '../src/systems/weaponGenerator.js'
 import { createBattle, runAutoBattle } from '../src/systems/battleEngine.js'
-import { SAMPLE_WEAPONS } from '../src/data/sampleWeapons.js'
+import { TEST_WEAPONS } from './testWeapons.js'
 import { ELEMENTS } from '../src/data/elements.js'
 import { RARITIES } from '../src/data/rarities.js'
 import { ENCHANT_RULES, ENCHANTS, ENCHANTS_BY_ID } from '../src/data/itemTemplates.js'
@@ -71,7 +71,7 @@ console.log('\n====== 2. 1〜15階の自動周回シミュレーション ======
 // ============================================================
 console.log('\n====== 3. 生成敵との実戦闘（battleEngine互換） ======')
 {
-  const weapon = SAMPLE_WEAPONS.find((w) => w.weaponType === 'sword') // 火のレア剣
+  const weapon = TEST_WEAPONS.find((w) => w.weaponType === 'sword') // 火のレア剣
   let completed = 0
   for (let floor = 1; floor <= 3; floor++) {
     const enemyDef = generateEnemy({ floor, rng: createSeededRng(floor) })

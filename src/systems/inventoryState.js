@@ -8,6 +8,9 @@ export function useInventoryState() {
   // 新しいドロップ品を先頭に追加する
   const addItem = (item) => setItems((prev) => [item, ...prev])
 
+  // 複数アイテムを定義順のまま末尾に追加する（初期装備の一括付与用）
+  const addItems = (list) => setItems((prev) => [...prev, ...list])
+
   // アイテムを削除する（抽出で装備が破壊されたとき用）
   const removeItem = (itemId) => setItems((prev) => prev.filter((it) => it.id !== itemId))
 
@@ -15,5 +18,5 @@ export function useInventoryState() {
   const updateItem = (nextItem) =>
     setItems((prev) => prev.map((it) => (it.id === nextItem.id ? nextItem : it)))
 
-  return { items, addItem, removeItem, updateItem }
+  return { items, addItem, addItems, removeItem, updateItem }
 }

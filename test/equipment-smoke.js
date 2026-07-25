@@ -3,6 +3,7 @@
 // 2. 装備込みステータス合算（calcTotalStats。青天井%乗算＋会心率の100%上限）
 // 3. 移植バリデーション（渋カーブ組の同種重複＝GDD 10.3／スキル重複）
 // 4. 移植の適用（上書き・空き枠追加・元アイテム非破壊）
+// 5. 初期装備（データ構造・性能・通常ドロップと同じ扱いで装備/移植できること）
 
 import { checkEquip, calcTotalStats } from '../src/systems/equipmentState.js'
 import {
@@ -12,6 +13,9 @@ import {
   applyEnchantTransplant,
 } from '../src/systems/extractInventoryState.js'
 import { calcJobStats } from '../src/data/jobs.js'
+import { createStarterEquipment } from '../src/data/starterEquipment.js'
+import { RARITIES } from '../src/data/rarities.js'
+import { ARMOR_TEMPLATE } from '../src/data/itemTemplates.js'
 
 let passCount = 0
 let failCount = 0
@@ -125,6 +129,48 @@ console.log('\n====== 4. 移植の適用 ======')
   check('青天井組の重ね積み：同種2個が並ぶ',
     enchanted.enchants.filter((e) => e.enchantId === 'atkPct').length === 2)
   check('移植後のエンチャントにextractIdが残らない', !('extractId' in enchanted.enchants[1]))
+}
+
+// ============================================================
+console.log('\n====== 5. 初期装備（スターター一式） ======')
+{
+  const starters = createStarterEquipment()
+  const weapons = starters.filter((s) => s.slot === 'weapon')
+  check('武器6種＋防具1の計7個', starters.length === 7 && weapons.length === 6,
+    `実際: ${starters.length}個（武器${weapons.length}）`)
+  check('武器6種が全て揃う', new Set(weapons.map((s) => s.weaponType)).size === 6)
+  check('IDが一意', new Set(starters.map((s) => s.id)).size === starters.length)
+  check('全てコモン', starters.every((s) => s.rarity === 'common'))
+  check('全て無属性（element=null）', starters.every((s) => s.element === null))
+  check('武器は全てスキル1個（+0）持ち',
+    weapons.every((s) => s.skills.length === 1 && s.skills[0].skillId && s.skills[0].plus === 0))
+  check('エンチャントなし', starters.every((s) => (s.enchants || []).length === 0))
+  // 性能はコモンドロップのレンジ下限より明確に低い（周回モチベーション維持）
+  const armor = starters.find((s) => s.slot === 'armor')
+  check('武器ATKはコモンドロップ未満', weapons.every((s) => s.atk < RARITIES.common.baseAtkRange[0]),
+    `実際: ${weapons.map((s) => s.atk).join(',')}`)
+  check('防具HPはコモンドロップ未満', armor.hp < ARMOR_TEMPLATE.hpRange.common[0], `実際: ${armor.hp}`)
+
+  // 通常ドロップと同じ扱いで装備できる
+  const sword = weapons.find((s) => s.weaponType === 'sword')
+  check('剣士が初期剣を装備できる',
+    checkEquip({ jobId: 'swordsman', slotKey: 'weapon', item: sword }) === null)
+  check('初期防具を装備できる',
+    checkEquip({ jobId: 'swordsman', slotKey: 'armor', item: armor }) === null)
+
+  // 通常ドロップと同じ扱いで移植できる（スキル枠1に上書き移植）
+  const bowSkill = weapons.find((s) => s.weaponType === 'bow').skills[0]
+  const entry = { extractId: 'ext_starter_test', skillId: bowSkill.skillId, plus: 0 }
+  check('初期武器へのスキル移植バリデーション通過',
+    validateSkillTransplant({ item: sword, targetIndex: 0, entry }) === null)
+  const transplanted = applySkillTransplant({ item: sword, targetIndex: 0, entry })
+  check('初期武器へスキル移植できる', transplanted.skills[0].skillId === bowSkill.skillId)
+
+  // 毎回新しいオブジェクトが返る（移植等で定義側が汚れない）
+  const fresh = createStarterEquipment().find((s) => s.weaponType === 'sword')
+  check('createStarterEquipmentは毎回新規オブジェクトを返す',
+    fresh !== sword && fresh.skills[0].skillId === sword.skills[0].skillId &&
+    fresh.skills[0].skillId !== bowSkill.skillId)
 }
 
 // ============================================================

@@ -13,6 +13,21 @@ export const ELEMENTS = {
 
 export const ELEMENT_IDS = Object.keys(ELEMENTS)
 
+// 無属性の表示用定義（初期装備等のelement=null用）
+// ※ELEMENTSには含めない：ELEMENT_IDS経由のドロップ属性抽選等に混ざらないようにするため
+export const NO_ELEMENT = { id: null, name: '無属性', icon: '◽', color: '#8a90a0' }
+
+// 属性IDから表示用定義を返す（無属性=nullに対応。UI表示側はこれを使う）
+export function getElementDef(elementId) {
+  return elementId ? ELEMENTS[elementId] : NO_ELEMENT
+}
+
+// 「火属性」「無属性」のような表示ラベル（無属性に「属性」を重ねない）
+export function getElementLabel(elementId) {
+  const def = getElementDef(elementId)
+  return elementId ? `${def.name}属性` : def.name
+}
+
 // 弱点サイクル：攻撃側 → 防御側 が1.5倍になる組み合わせ
 const ADVANTAGE = [
   ['fire', 'earth'],

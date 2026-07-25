@@ -34,9 +34,14 @@ try {
   // ============================================================
   console.log('====== 1. ロビー（App） ======')
   const { default: App } = await server.ssrLoadModule('/src/App.jsx')
+  // SSRではuseEffectが動かないため初期装備は未付与＝インベントリ空・未装備の状態が描画される
   const lobbyHtml = render(React.createElement(App))
   check('ロビーが描画できる', lobbyHtml.includes('拠点ロビー'))
-  check('装備管理への導線がある', lobbyHtml.includes('装備・アイテム'))
+  check('フッターナビが表示される',
+    ['ダンジョン', '装備', '辞典'].every((label) => lobbyHtml.includes(label)))
+  check('現在の装備（簡易表示）がある', lobbyHtml.includes('現在の装備'))
+  check('テスト用サンプル武器の表示が無い', !lobbyHtml.includes('テスト用サンプル'))
+  check('未装備時は出発できない注意が出る', lobbyHtml.includes('武器を装備していない'))
 
   // ============================================================
   console.log('\n====== 2. 装備管理画面 ======')
@@ -45,13 +50,15 @@ try {
   const { useExtractInventoryState } = await server.ssrLoadModule('/src/systems/extractInventoryState.js')
   const { generateLoot } = await server.ssrLoadModule('/src/systems/lootSystem.js')
   const { createSeededRng } = await server.ssrLoadModule('/src/systems/weaponGenerator.js')
+  const { createStarterEquipment } = await server.ssrLoadModule('/src/data/starterEquipment.js')
 
-  // シード付きでドロップ品を量産（武器・防具・アクセが混ざる）
+  // シード付きでドロップ品を量産（武器・防具・アクセが混ざる）＋初期装備一式
   const rng = createSeededRng(123)
   const items = []
   for (let floor = 1; floor <= 15; floor++) {
     items.push(generateLoot({ floor, grade: floor % 5 === 0 ? 'boss' : 'grunt', rng }))
   }
+  items.push(...createStarterEquipment())
   check('テスト用ドロップに武器がある', items.some((it) => it.slot === 'weapon'))
 
   // フックはコンポーネント内でしか呼べないため、ラッパー経由で実体を渡す
@@ -76,6 +83,7 @@ try {
   check('ステータス合計が表示される', eqHtml.includes('装備込み') && eqHtml.includes('会心'))
   check('種別タブが表示される', eqHtml.includes('武器（') && eqHtml.includes('防具（') && eqHtml.includes('アクセ（'))
   check('抽出インベントリの案内が表示される', eqHtml.includes('抽出インベントリ'))
+  check('初期装備（無属性）が描画できる', eqHtml.includes('なめし革の剣') && eqHtml.includes('無属性'))
 
   // 所持ゼロでも落ちない
   function EmptyWrapper() {

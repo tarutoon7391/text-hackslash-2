@@ -2,12 +2,14 @@
 // 1. 属性相性表の検証
 // 2. 属性一致ボーナスの検証（同シードの比較で威力+20%を確認）
 // 3. 弱体効果（デバフ上書き・状態異常・解除・操作系）の検証
-// 4. 全職業×装備可能サンプル武器×全敵で自動戦闘を回して集計
+// 4. 全職業×装備可能テスト武器×全敵で自動戦闘を回して集計
+// 5. 初期装備（無属性武器）での戦闘
 
 import { getElementMultiplier, ELEMENT_IDS, ELEMENTS } from '../src/data/elements.js'
 import { JOBS, JOB_IDS } from '../src/data/jobs.js'
 import { ENEMIES, ENEMY_IDS } from '../src/data/enemies.js'
-import { SAMPLE_WEAPONS } from '../src/data/sampleWeapons.js'
+import { TEST_WEAPONS } from './testWeapons.js'
+import { createStarterEquipment } from '../src/data/starterEquipment.js'
 import { SKILLS_NORMAL } from '../src/data/skills_normal.js'
 import { SKILLS_ELEMENTAL } from '../src/data/skills_elemental.js'
 import {
@@ -179,13 +181,13 @@ console.log('\n====== 4. 弱体効果の統一ルール ======')
 }
 
 // ============================================================
-console.log('\n====== 5. 全職業×装備可能サンプル武器×全敵 自動戦闘 ======')
+console.log('\n====== 5. 全職業×装備可能テスト武器×全敵 自動戦闘 ======')
 let battleCount = 0
 const tally = { win: 0, lose: 0, draw: 0, weakHits: 0, resistHits: 0, crits: 0, ailments: 0, buffs: 0, debuffs: 0 }
 let seed = 1000
 for (const jobId of JOB_IDS) {
   const job = JOBS[jobId]
-  const weapons = SAMPLE_WEAPONS.filter((w) => job.equipableWeaponTypes.includes(w.weaponType))
+  const weapons = TEST_WEAPONS.filter((w) => job.equipableWeaponTypes.includes(w.weaponType))
   for (const weapon of weapons) {
     for (const enemyId of ENEMY_IDS) {
       const battle = createBattle({ jobId, weapon, enemyId, seed: seed++ })
@@ -212,6 +214,27 @@ check('属性相性（耐性）が発生している', tally.resistHits > 0)
 check('会心が発生している', tally.crits > 0)
 check('状態異常が発生している', tally.ailments > 0)
 check('バフ/デバフが発生している', tally.buffs > 0 && tally.debuffs > 0)
+
+// ============================================================
+console.log('\n====== 6. 初期装備（無属性武器）での戦闘 ======')
+{
+  // 初回プレイの実際の武器＝無属性（element=null）の初期装備で戦闘が完走するか
+  const starters = createStarterEquipment().filter((it) => it.slot === 'weapon')
+  let completed = 0
+  let starterSeed = 9000
+  for (const weapon of starters) {
+    const jobId = JOB_IDS.find((id) => JOBS[id].equipableWeaponTypes.includes(weapon.weaponType))
+    for (const enemyId of ENEMY_IDS) {
+      const battle = createBattle({ jobId, weapon, enemyId, seed: starterSeed++ })
+      runAutoBattle(battle, { maxTurns: 30 })
+      if (battle.result) completed++
+    }
+  }
+  check('初期武器6種×全敵の戦闘がエラーなく完走', completed === starters.length * ENEMY_IDS.length,
+    `実際: ${completed}`)
+  // 無属性は攻守とも相性なし（getElementMultiplierがnullで常に1.0倍）
+  check('無属性は相性計算されない', getElementMultiplier(null, 'fire') === 1.0 && getElementMultiplier('fire', null) === 1.0)
+}
 
 // ============================================================
 console.log('\n====== 結果 ======')

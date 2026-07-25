@@ -6,7 +6,7 @@
 import { useMemo, useRef, useState } from 'react'
 import { JOBS, calcJobStats } from '../data/jobs.js'
 import { WEAPON_TYPES } from '../data/weaponTypes.js'
-import { ELEMENTS } from '../data/elements.js'
+import { getElementDef, getElementLabel } from '../data/elements.js'
 import { RARITIES } from '../data/rarities.js'
 import { ENCHANT_RULES } from '../data/itemTemplates.js'
 import { EQUIP_SLOTS, calcTotalStats } from '../systems/equipmentState.js'
@@ -110,7 +110,7 @@ export default function EquipmentScreen({
   // 一覧のアイテムカード（ロビーの武器カードと同系統の見た目）
   const renderItemCard = (item) => {
     const rarity = RARITIES[item.rarity]
-    const elem = ELEMENTS[item.element]
+    const elem = getElementDef(item.element) // 初期装備はelement=null（無属性）
     const equippedSlot = equipment.equippedSlotOf(item.id)
     return (
       <div
@@ -131,7 +131,7 @@ export default function EquipmentScreen({
           <span className="weapon-rarity" style={{ color: rarity.color }}>{rarity.name}</span>
         </div>
         <div className="weapon-meta">
-          {elem.icon}{elem.name}属性
+          {elem.icon}{getElementLabel(item.element)}
           {item.slot === 'weapon' && ` ／ ${WEAPON_TYPES[item.weaponType].name} ／ ATK+${item.atk}`}
           {item.slot === 'armor' && ` ／ DEF+${item.def}・HP+${item.hp}`}
           {item.slot === 'accessory' && ` ／ HP+${item.hp}・MP+${item.mp}`}
@@ -185,7 +185,7 @@ export default function EquipmentScreen({
   // 詳細ビュー（枠選択→抽出・移植の起点。全画面オーバーレイ）
   const renderDetail = (item) => {
     const rarity = RARITIES[item.rarity]
-    const elem = ELEMENTS[item.element]
+    const elem = getElementDef(item.element) // 初期装備はelement=null（無属性）
     const skillSlots = item.slot === 'weapon' ? RARITIES[item.rarity].skillSlots : 0
     const enchantSlots = ENCHANT_RULES.slotsByRarity[item.rarity] ?? 0
     // 選択中の枠の中身（空き枠ならnull）
@@ -210,7 +210,7 @@ export default function EquipmentScreen({
               <span className="loot-rarity" style={{ color: rarity.color }}>{rarity.name}</span>
             </div>
             <div className="loot-meta">
-              {elem.icon}{elem.name}属性
+              {elem.icon}{getElementLabel(item.element)}
               {item.slot === 'weapon' && ` ／ ${WEAPON_TYPES[item.weaponType].name} ／ ATK+${item.atk}`}
               {item.slot === 'armor' && ` ／ DEF+${item.def}・HP+${item.hp}`}
               {item.slot === 'accessory' && ` ／ HP+${item.hp}・MP+${item.mp}`}

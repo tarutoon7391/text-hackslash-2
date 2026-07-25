@@ -3,7 +3,7 @@
 // - 被弾したキャラのパネルはシェイクアニメーション
 // - コマンドは「こうげき／スキル／仲間にする／逃げる」の4択フロー
 import { useRef, useState } from 'react'
-import { ELEMENTS } from '../data/elements.js'
+import { ELEMENTS, getElementDef } from '../data/elements.js'
 import { ENEMIES } from '../data/enemies.js'
 import { STATUS_EFFECTS } from '../data/statusEffects.js'
 import {
@@ -244,10 +244,11 @@ export default function BattleScreen({ battle, setBattle, onExit, onOpenDictiona
   }
 
   // 属性バッジのタップ：その属性名1つだけをまとめ用語ポップアップで表示する
+  // 無属性（elementId=null。初期装備の武器等）は用語「無属性」を表示する
   const onElemChipTap = (ev, elementId) => {
     if (busy || targeting) return // 対象選択中はパネルタップ（対象確定）を優先する
     ev.stopPropagation()
-    const entry = GLOSSARY_BY_TERM[ELEMENTS[elementId].name]
+    const entry = GLOSSARY_BY_TERM[getElementDef(elementId).name]
     if (entry) setGlossTerms([entry])
   }
 
@@ -281,7 +282,7 @@ export default function BattleScreen({ battle, setBattle, onExit, onOpenDictiona
               <div className="enemy-title">
                 {e.name}
                 <span className="elem-chip" onClick={(ev) => onElemChipTap(ev, e.element)}>
-                  {ELEMENTS[e.element].icon}{ELEMENTS[e.element].name}
+                  {getElementDef(e.element).icon}{getElementDef(e.element).name}
                 </span>
               </div>
               <Bar label="HP" value={e.stats.hp} max={e.stats.maxHp} color="#e05555" />
@@ -307,8 +308,9 @@ export default function BattleScreen({ battle, setBattle, onExit, onOpenDictiona
         <StatusEffectShake color={seShakes.player}>
           <div className="player-name">
             {p.name}
+            {/* 初期装備の武器は無属性（p.element=null）なので無属性対応のヘルパーで表示する */}
             <span className="elem-chip" onClick={(ev) => onElemChipTap(ev, p.element)}>
-              {ELEMENTS[p.element].icon}{ELEMENTS[p.element].name}
+              {getElementDef(p.element).icon}{getElementDef(p.element).name}
             </span>
             <span className="turn-label">ターン{battle.turn}</span>
           </div>
