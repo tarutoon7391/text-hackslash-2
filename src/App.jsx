@@ -4,7 +4,9 @@
 // 画面全体は「メイン領域＋フッターナビ」の縦シェル構造。フッターは拠点（ロビー・装備）のみ表示
 // 出発武器は装備スロット（EquipmentScreenで付け替え）から取る。武器入手はインベントリ経由のみ
 // 用語辞典はオーバーレイとして重ねるので、どの画面の状態も失われない
-import { useEffect, useState } from 'react'
+// 成長：敵を倒すと職業に経験値／ドロップは素材（欠片）メイン／装備は合成で+値を上げる
+// 所持品・装備・素材・職業レベル・チェックポイントは端末内に自動保存される（saveStorage）
+import { useEffect, useMemo, useState } from 'react'
 import SetupScreen from './components/SetupScreen.jsx'
 import BattleScreen from './components/BattleScreen.jsx'
 import DungeonScreen from './components/dungeon/DungeonScreen.jsx'
@@ -16,27 +18,31 @@ import { createBattle } from './systems/battleEngine.js'
 import { useDungeonState, isBossFloor } from './systems/dungeonState.js'
 import { useInventoryState } from './systems/inventoryState.js'
 import { useEquipmentState } from './systems/equipmentState.js'
-import { useExtractInventoryState } from './systems/extractInventoryState.js'
+import { useProgressState, enemyExpFor } from './systems/progressState.js'
+import { usePersistentState } from './systems/saveStorage.js'
+import { buildPlayerStats } from './systems/playerStats.js'
 import { generateEnemy } from './systems/enemyGenerator.js'
-import { generateLoot } from './systems/lootSystem.js'
+import { generateDrops } from './systems/lootSystem.js'
 import { createStarterEquipment } from './data/starterEquipment.js'
+import { JOBS } from './data/jobs.js'
 
 export default function App() {
   const [screen, setScreen] = useState('lobby') // lobby | equipment | dungeon | battle | loot
   const [battle, setBattle] = useState(null)
   // 職業はロビーと装備管理画面で共有する（武器スロットの装備可否チェックに使う）
-  const [jobId, setJobId] = useState('swordsman')
-  const [loadout, setLoadout] = useState(null)   // {jobId, weapon}
-  const [lastLoot, setLastLoot] = useState(null) // 直近のドロップ（リザルト表示用）
-  const [lootFloor, setLootFloor] = useState(null)
+  const [jobId, setJobId] = usePersistentState('jobId', 'swordsman', (saved) => (JOBS[saved] ? saved : 'swordsman'))
+  // 直近の勝利リザルト（表示用）：{floor, item, shards, exp, levelBefore, levelAfter}
+  const [lastResult, setLastResult] = useState(null)
   const [showDictionary, setShowDictionary] = useState(false)
   const dungeon = useDungeonState()
   const inventory = useInventoryState()
   const equipment = useEquipmentState()
-  const extractInv = useExtractInventoryState()
+  const progress = useProgressState()
+  const itemsById = useMemo(() => Object.fromEntries(inventory.items.map((it) => [it.id, it])), [inventory.items])
+  const jobLevel = progress.jobLevels[jobId]?.level || 1
 
   // 新規プレイ（インベントリが空の状態でアプリを開いた）なら初期装備一式を配る
-  // DB保存はまだ無いため、リロード後の初回マウントは毎回ここを通る
+  // セーブがあればインベントリは空ではないので、ここは本当の初回だけ通る
   useEffect(() => {
     if (inventory.items.length === 0) inventory.addItems(createStarterEquipment())
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
@@ -50,8 +56,7 @@ export default function App() {
   }
 
   // ロビーから出発（武器は装備スロットのものをSetupScreen経由で受け取る）
-  const depart = ({ weapon, startFloor }) => {
-    setLoadout({ jobId, weapon })
+  const depart = ({ startFloor }) => {
     dungeon.enterDungeon(startFloor)
     setScreen('dungeon')
   }
@@ -59,7 +64,11 @@ export default function App() {
   // ダンジョンで「進む」→ その階の敵を生成して戦闘開始
   const advance = () => {
     const enemyDef = generateEnemy({ floor: dungeon.currentFloor })
-    setBattle(createBattle({ jobId: loadout.jobId, weapon: loadout.weapon, enemyDef }))
+    // 戦闘のたびに「今の職業レベル＋今の装備」から実ステータスを作る
+    // （探索中にレベルが上がれば、次の戦闘からすぐ反映される）
+    const weapon = itemsById[equipment.slots.weapon]
+    const playerStats = buildPlayerStats({ jobId, level: jobLevel, slots: equipment.slots, itemsById })
+    setBattle(createBattle({ jobId, weapon, enemyDef, playerStats }))
     setScreen('battle')
   }
 
@@ -69,13 +78,17 @@ export default function App() {
     const floor = dungeon.currentFloor
     setBattle(null)
     if (result === 'win' && floor != null) {
-      const grade = isBossFloor(floor) ? 'boss' : 'grunt'
-      const item = generateLoot({ floor, grade })
-      inventory.addItem(item)
+      const boss = isBossFloor(floor)
+      // ドロップ：欠片は必ず、装備は雑魚だとたまに・ボスは確定
+      const { item, shards } = generateDrops({ floor, grade: boss ? 'boss' : 'grunt' })
+      if (item) inventory.addItem(item)
+      progress.addShards(shards.tier, shards.count)
+      // 経験値：今の職業に入る
+      const exp = enemyExpFor({ floor, boss })
+      const { before, after } = progress.gainExp(jobId, exp)
       // ボス撃破で次ブロックの先頭階（次のチェックポイント）を解放
-      if (isBossFloor(floor)) dungeon.unlockCheckpoint(floor + 1)
-      setLastLoot(item)
-      setLootFloor(floor)
+      if (boss) dungeon.unlockCheckpoint(floor + 1)
+      setLastResult({ floor, item, shards, exp, levelBefore: before.level, levelAfter: after.level })
       setScreen('loot')
     } else {
       // 敗北・逃走時は常にロビーへ（特定階への自動帰還はしない）
@@ -123,6 +136,7 @@ export default function App() {
             items={inventory.items}
             equipment={equipment}
             jobId={jobId}
+            jobLevels={progress.jobLevels}
             onSelectJob={selectJob}
             onOpenEquipment={() => setScreen('equipment')}
           />
@@ -130,10 +144,12 @@ export default function App() {
         {screen === 'equipment' && (
           <EquipmentScreen
             jobId={jobId}
+            jobLevel={jobLevel}
             items={inventory.items}
             equipment={equipment}
-            extractInv={extractInv}
-            onRemoveItem={inventory.removeItem}
+            shards={progress.shards}
+            onSpendShards={progress.spendShards}
+            onRemoveItems={inventory.removeItems}
             onUpdateItem={inventory.updateItem}
             onBack={() => setScreen('lobby')}
             onOpenDictionary={() => setShowDictionary(true)}
@@ -150,10 +166,10 @@ export default function App() {
             onOpenDictionary={() => setShowDictionary(true)}
           />
         )}
-        {screen === 'loot' && lastLoot && (
+        {screen === 'loot' && lastResult && (
           <LootResultScreen
-            item={lastLoot}
-            floor={lootFloor}
+            result={lastResult}
+            jobName={JOBS[jobId].name}
             onNext={nextFloor}
             onLobby={toLobby}
             onOpenDictionary={() => setShowDictionary(true)}

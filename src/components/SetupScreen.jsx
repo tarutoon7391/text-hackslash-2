@@ -4,18 +4,22 @@
 // 出発時の武器は装備スロット（武器）に入っているものを使う
 // 職業は装備管理画面と共有するため親（App）が状態を持つ
 import { useMemo, useState } from 'react'
-import { JOBS, JOB_IDS, calcJobStats } from '../data/jobs.js'
+import { JOBS, JOB_IDS } from '../data/jobs.js'
 import { WEAPON_TYPES } from '../data/weaponTypes.js'
 import { RARITIES } from '../data/rarities.js'
-import { EQUIP_SLOTS, calcTotalStats } from '../systems/equipmentState.js'
+import { EQUIP_SLOTS } from '../systems/equipmentState.js'
+import { buildPlayerStats } from '../systems/playerStats.js'
+import { expToNextLevel } from '../systems/progressState.js'
 import CheckpointSelector from './dungeon/CheckpointSelector.jsx'
 
-export default function SetupScreen({ onDepart, checkpoints, items, equipment, jobId, onSelectJob, onOpenEquipment }) {
+export default function SetupScreen({ onDepart, checkpoints, items, equipment, jobId, jobLevels = {}, onSelectJob, onOpenEquipment }) {
   const [startFloor, setStartFloor] = useState(checkpoints[checkpoints.length - 1]) // 既定は最深チェックポイント
 
   const job = JOBS[jobId]
   const itemsById = useMemo(() => Object.fromEntries(items.map((it) => [it.id, it])), [items])
-  const stats = calcTotalStats({ baseStats: calcJobStats(jobId), slots: equipment.slots, itemsById })
+  const jobProgress = jobLevels[jobId] || { level: 1, exp: 0 }
+  // 表示するステータスは戦闘で使われる値そのもの（職業レベル・装備・+値・エンチャント込み）
+  const stats = buildPlayerStats({ jobId, level: jobProgress.level, slots: equipment.slots, itemsById })
   const weapon = itemsById[equipment.slots.weapon] || null
   // 装備後に職業を変えて、装備中の武器が使えない組み合わせになった場合は出発を止める
   const jobBlocked = Boolean(weapon) && !job.equipableWeaponTypes.includes(weapon.weaponType)
@@ -37,6 +41,7 @@ export default function SetupScreen({ onDepart, checkpoints, items, equipment, j
             >
               <span className="job-icon">{j.icon}</span>
               <span className="job-name">{j.name}</span>
+              <span className="job-level">Lv{jobLevels[id]?.level || 1}</span>
               <span className="job-weapons">
                 {j.equipableWeaponTypes.map((wt) => WEAPON_TYPES[wt].name).join('・')}
               </span>
@@ -45,6 +50,10 @@ export default function SetupScreen({ onDepart, checkpoints, items, equipment, j
         })}
       </div>
       <div className="stat-row">
+        <div className="job-exp-line">
+          {job.icon} {job.name} Lv{jobProgress.level}
+          <span className="job-exp">次のLvまで {Math.max(0, expToNextLevel(jobProgress.level) - jobProgress.exp)}</span>
+        </div>
         HP{stats.hp}／MP{stats.mp}／ATK{stats.atk}／DEF{stats.def}／SPD{stats.spd}／会心{stats.crit}%（装備込み）
       </div>
 
@@ -63,7 +72,7 @@ export default function SetupScreen({ onDepart, checkpoints, items, equipment, j
               <span className="equip-slot-label">{slotDef.name}</span>
               <span className="equip-slot-item">
                 {item
-                  ? `${item.slot === 'weapon' ? WEAPON_TYPES[item.weaponType].icon : item.icon} ${item.name}`
+                  ? `${item.slot === 'weapon' ? WEAPON_TYPES[item.weaponType].icon : item.icon} ${item.name}${item.plus > 0 ? ` +${item.plus}` : ''}`
                   : 'なし'}
               </span>
               {item && <span className="lobby-equip-rarity" style={{ color: rarity.color }}>{rarity.name}</span>}
@@ -71,7 +80,7 @@ export default function SetupScreen({ onDepart, checkpoints, items, equipment, j
           )
         })}
       </div>
-      <div className="equip-hint">タップで装備画面へ。付け替え・抽出・移植はそこから行う</div>
+      <div className="equip-hint">タップで装備画面へ。付け替え・合成はそこから行う</div>
 
       <h2 className="section-label">出発チェックポイント</h2>
       <CheckpointSelector checkpoints={checkpoints} selected={startFloor} onSelect={setStartFloor} />
@@ -79,7 +88,7 @@ export default function SetupScreen({ onDepart, checkpoints, items, equipment, j
       <button
         className="start-btn"
         disabled={!weapon || jobBlocked}
-        onClick={() => onDepart({ weapon, startFloor })}
+        onClick={() => onDepart({ startFloor })}
       >
         🏰 {startFloor}階から出発！
       </button>

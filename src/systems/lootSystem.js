@@ -135,3 +135,23 @@ export function generateLoot({ floor, grade, rng = Math.random }) {
   item.enchants = rollEnchants({ slot, rarity, floor, rng })
   return item
 }
+
+// 勝利時のドロップ一式を生成する（素材メイン。装備は雑魚だとたまに、ボスは確定）
+// 戻り値：{ item（装備 or null）, shards: {tier, count} }
+// 装備のIDはセーブをまたいでも重複しないよう、連番ではなく一意な文字列に付け直す
+export function generateDrops({ floor, grade, rng = Math.random }) {
+  const cfg = DUNGEON_CONFIG.drops[grade]
+  const [minShards, maxShards] = cfg.shards
+  const shards = {
+    tier: Math.ceil(floor / DUNGEON_CONFIG.blockSize),
+    count: randInt(minShards, maxShards, rng),
+  }
+  let item = null
+  if (rng() < cfg.equipChance) {
+    item = generateLoot({ floor, grade, rng })
+    item.id = `it_${Date.now().toString(36)}_${Math.floor(rng() * 1e9).toString(36)}`
+    item.plus = 0
+    item.plusExp = 0
+  }
+  return { item, shards }
+}

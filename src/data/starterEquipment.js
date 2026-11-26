@@ -54,7 +54,9 @@ export function createStarterEquipment() {
       atk: STARTER_RULES.weaponAtk,
       skills: skillId ? [{ skillId, plus: 0 }] : [],
       enchants: [],
-      floor: null, // ドロップ産ではないので「〇階産」表示なし
+      floor: null,
+      plus: 0,
+      plusExp: 0, // ドロップ産ではないので「〇階産」表示なし
     }
   })
 

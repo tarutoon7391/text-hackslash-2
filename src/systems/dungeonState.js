@@ -3,6 +3,7 @@
 // - React state（カスタムフック）で管理。DB永続化はフェーズ3以降（リロードで消えてよい）
 // - 純粋関数（floorToZoneElement等）はスモークテストからも使うためフックと分離して定義
 import { useState } from 'react'
+import { usePersistentState } from './saveStorage.js'
 import { DUNGEON_CONFIG } from '../data/dungeonConfig.js'
 
 // 階層→ゾーン属性（5階ブロックごとに火→水→雷→土→光→闇を巡回、30階で一周し以降も継続）
@@ -25,7 +26,11 @@ export function floorInBlock(floor) {
 // ダンジョン状態のカスタムフック
 export function useDungeonState() {
   const [currentFloor, setCurrentFloor] = useState(null) // null=ダンジョン外（ロビー）
-  const [checkpoints, setCheckpoints] = useState([1]) // 到達済みチェックポイント（1階は固定解放）
+  // 到達済みチェックポイント（1階は固定解放）。端末内に保存する
+  const [checkpoints, setCheckpoints] = usePersistentState('checkpoints', [1], (saved) => {
+    const list = Array.isArray(saved) ? saved.filter((f) => Number.isInteger(f) && f >= 1) : []
+    return [...new Set([1, ...list])].sort((a, b) => a - b)
+  })
 
   const enterDungeon = (startFloor) => setCurrentFloor(startFloor)
   const advanceFloor = () => setCurrentFloor((f) => (f == null ? null : f + 1))

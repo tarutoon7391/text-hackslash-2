@@ -89,22 +89,33 @@ function getPlusPowerMult(plus) {
 // ============================================================
 
 // enemyId：enemies.jsの固定敵ID／enemyDef：生成した敵定義（ダンジョン用）のどちらかを渡す
-export function createBattle({ jobId, weapon, enemyId, enemyDef = null, seed = null }) {
+// playerStats：装備・レベル込みの実ステータス（playerStats.jsのbuildPlayerStatsの戻り値）。
+//   渡すとそれをそのまま使う（防具・アクセ・エンチャント・+値・職業レベルが戦闘に反映される）。
+//   省略時は従来通り「職業Lv1の基礎値＋武器ATK×武器種補正」だけで作る（スモークテスト用）
+export function createBattle({ jobId, weapon, enemyId, enemyDef = null, seed = null, playerStats: givenStats = null }) {
   const rng = seed != null ? createSeededRng(seed) : Math.random
   const job = JOBS[jobId]
   const jobStats = calcJobStats(jobId)
   const typeMods = WEAPON_TYPES[weapon.weaponType].statMods
 
-  const playerStats = {
-    maxHp: jobStats.hp,
-    maxMp: jobStats.mp,
-    hp: jobStats.hp,
-    mp: jobStats.mp,
-    atk: Math.round((jobStats.atk + weapon.atk) * typeMods.atk),
-    def: jobStats.def,
-    spd: Math.round(jobStats.spd * typeMods.spd),
-    crit: Math.round(jobStats.crit * typeMods.crit),
-  }
+  const playerStats = givenStats
+    ? {
+        // 回避・被ダメ軽減・耐性・会心ダメージ等の追加ステータスもそのまま持たせる
+        // （getEffStatは stats[stat] を基礎値として読むので、evasion等はここに置くだけで効く）
+        ...givenStats,
+        maxHp: givenStats.hp,
+        maxMp: givenStats.mp,
+      }
+    : {
+        maxHp: jobStats.hp,
+        maxMp: jobStats.mp,
+        hp: jobStats.hp,
+        mp: jobStats.mp,
+        atk: Math.round((jobStats.atk + weapon.atk) * typeMods.atk),
+        def: jobStats.def,
+        spd: Math.round(jobStats.spd * typeMods.spd),
+        crit: Math.round(jobStats.crit * typeMods.crit),
+      }
 
   const def = enemyDef || ENEMIES[enemyId]
   const enemyStats = {
@@ -471,7 +482,8 @@ function executeNormalAttack(battle, attacker, defender) {
 
   // 会心判定
   const isCrit = battle.rng() < clamp(getEffStat(attacker, 'crit'), 0, 100) / 100
-  const critMult = isCrit ? BATTLE_CONFIG.critMultiplier : 1
+  // 会心ダメージ+%（エンチャント）は会心倍率に乗算
+  const critMult = isCrit ? BATTLE_CONFIG.critMultiplier * (1 + (attacker.stats.critDamagePct || 0) / 100) : 1
 
   // DEF軽減・被ダメ軽減（属性相性・一致ボーナスは通常攻撃には乗らない）
   const mitigation = BATTLE_CONFIG.defenseFactor / (BATTLE_CONFIG.defenseFactor + getEffStat(defender, 'def'))
@@ -575,7 +587,11 @@ function executeAttack(battle, attacker, defender, skill, skillRef, manualTarget
     // --- 威力 ---
     let power = (atkSpec.power + bonusPower + (lastHitSpec.powerBonus || 0)) * plusMult
     if (isCrit && atkSpec.critExtraPower) power += atkSpec.critExtraPower
-    const critMult = isCrit ? (atkSpec.critDamageMultiplier || BATTLE_CONFIG.critMultiplier) : 1
+    const critMult = isCrit
+      ? (atkSpec.critDamageMultiplier || BATTLE_CONFIG.critMultiplier) * (1 + (attacker.stats.critDamagePct || 0) / 100)
+      : 1
+    // スキル威力+%（エンチャント）
+    const skillPowerMult = 1 + (attacker.stats.skillPowerPct || 0) / 100
 
     // --- DEF軽減 ---
     let defEff = getEffStat(defender, 'def')
@@ -599,7 +615,7 @@ function executeAttack(battle, attacker, defender, skill, skillRef, manualTarget
 
     // --- ダメージ合成 ---
     const variance = 1 + (battle.rng() * 2 - 1) * BATTLE_CONFIG.damageVariance
-    let dmg = atkEff * power * elemMult * matchPowerMult * critMult * mitigation * (1 - cut / 100) * freezeMult * variance
+    let dmg = atkEff * power * skillPowerMult * elemMult * matchPowerMult * critMult * mitigation * (1 - cut / 100) * freezeMult * variance
     dmg = Math.max(1, Math.round(dmg))
 
     applyDamage(battle, defender, dmg)
@@ -1040,6 +1056,8 @@ function applyAilment(battle, attacker, target, ailmentId, chanceTier, stacks, i
   // 付与率 = ティア基本値 + 属性一致ボーナス、その後耐性で減衰
   let chance = typeof chanceTier === 'number' ? chanceTier : AILMENT_CHANCE_TIERS[chanceTier]
   if (isMatch) chance += BATTLE_CONFIG.elementMatchAilmentBonus
+  // 状態異常付与率+%（エンチャント）
+  chance += (attacker?.stats?.ailmentChancePct || 0) / 100
   const dataResist = target.ailmentResists[ailmentId] || 0
   const statResist = clamp(getEffStat(target, 'ailmentResist'), 0, 100) / 100
   chance = chance * (1 - dataResist) * (1 - statResist)

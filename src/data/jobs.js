@@ -4,6 +4,8 @@
 // baseStats：係数1.0のときの基準値（Lv1想定、実装後調整）
 // defaultWeaponType：初回の職業選択時に自動装備される初期武器の武器種（フェーズ3パート3）
 
+import { PROGRESSION_CONFIG } from './progressionConfig.js'
+
 export const BASE_STATS = {
   hp: 100,
   mp: 40,
@@ -65,12 +67,15 @@ export const JOBS = {
 
 export const JOB_IDS = Object.keys(JOBS)
 
-// 職業の実ステータスを計算する（基準値×傾向係数）
-export function calcJobStats(jobId) {
+// 職業の実ステータスを計算する（基準値×傾向係数×レベル成長）
+// レベル成長：Lv1の値 ×(1 + (レベル-1)×成長率)。成長率はprogressionConfig参照
+export function calcJobStats(jobId, level = 1) {
   const job = JOBS[jobId]
+  const growth = PROGRESSION_CONFIG.level.growthPerLevel
   const stats = {}
   for (const [stat, base] of Object.entries(BASE_STATS)) {
-    stats[stat] = Math.round(base * TENDENCY_COEF[job.tendencies[stat]])
+    const lv1 = base * TENDENCY_COEF[job.tendencies[stat]]
+    stats[stat] = Math.round(lv1 * (1 + (level - 1) * (growth[stat] || 0)))
   }
   return stats
 }

@@ -13,6 +13,17 @@ import {
   applySkillTransplant,
   applyEnchantTransplant,
 } from '../src/systems/extractInventoryState.js'
+import { buildPlayerStats, computeStats, getEffectivePlus, getItemStats } from '../src/systems/playerStats.js'
+import {
+  fuse, addPlusExp, expToNextPlus, totalInvestedExp, shardExp, equipMaterialExp,
+  buildSkillPool, buildEnchantPool,
+} from '../src/systems/fusionSystem.js'
+import { applyJobExp, expToNextLevel, enemyExpFor, shardTierForFloor } from '../src/systems/progressState.js'
+import { migrateItems } from '../src/systems/inventoryState.js'
+import { createBattle } from '../src/systems/battleEngine.js'
+import { generateDrops } from '../src/systems/lootSystem.js'
+import { createSeededRng } from '../src/systems/weaponGenerator.js'
+import { PROGRESSION_CONFIG } from '../src/data/progressionConfig.js'
 import { filterAndSortItems, getStatGain, formatStatGain } from '../src/systems/equipmentFilter.js'
 import { JOBS, JOB_IDS, calcJobStats } from '../src/data/jobs.js'
 import { createStarterEquipment } from '../src/data/starterEquipment.js'
@@ -247,6 +258,135 @@ console.log('\n【7】装備一覧の絞り込み・並べ替え')
   const gain = getStatGain(list[1], 'hp')
   check('上がり幅：固定値と%を別々に持つ', gain.flat === 4 && gain.pct === 6)
   check('上がり幅の表示テキスト', formatStatGain(list[1], 'hp') === 'HP+4・+6%' && formatStatGain(list[3], 'hp') === null)
+}
+
+// ============================================================
+// 8. 職業レベル・実ステータス（戦闘に渡す値）
+// ============================================================
+console.log('\n【8】職業レベル・実ステータス')
+{
+  const lv1 = calcJobStats('swordsman', 1)
+  const lv10 = calcJobStats('swordsman', 10)
+  check('レベル省略時はLv1と同じ', JSON.stringify(calcJobStats('swordsman')) === JSON.stringify(lv1))
+  check('レベルが上がるとHP/ATK/DEFが伸びる', lv10.hp > lv1.hp && lv10.atk > lv1.atk && lv10.def > lv1.def)
+  check('会心率はレベルで伸びない', lv10.crit === lv1.crit)
+
+  check('必要経験値はレベルが上がるほど増える', expToNextLevel(5) > expToNextLevel(1))
+  const leveled = applyJobExp({ level: 1, exp: 0 }, expToNextLevel(1) + expToNextLevel(2) + 3)
+  check('経験値で複数レベル上がり、余りが残る', leveled.level === 3 && leveled.exp === 3)
+  check('上限レベルでは経験値が貯まらない',
+    applyJobExp({ level: PROGRESSION_CONFIG.level.max, exp: 0 }, 999999).exp === 0)
+  check('敵の経験値：深い階・ボスほど多い',
+    enemyExpFor({ floor: 10, boss: false }) > enemyExpFor({ floor: 1, boss: false }) &&
+    enemyExpFor({ floor: 5, boss: true }) > enemyExpFor({ floor: 5, boss: false }))
+  check('欠片ランク：5階ごとに1上がる', shardTierForFloor(1) === 1 && shardTierForFloor(5) === 1 && shardTierForFloor(6) === 2)
+
+  const sword = { id: 'w', slot: 'weapon', weaponType: 'greatsword', atk: 10, plus: 5, plusExp: 0, skills: [], enchants: [{ enchantId: 'atkPct', value: 10 }, { enchantId: 'critDamagePct', value: 20 }] }
+  const armor = { id: 'a', slot: 'armor', def: 10, hp: 20, plus: 0, enchants: [{ enchantId: 'damageCutPct', value: 5 }, { enchantId: 'evasionPct', value: 3 }] }
+  const itemsById = { w: sword, a: armor }
+  const slots = { weapon: 'w', armor: 'a', accessory1: null, accessory2: null }
+
+  check('+値の効果は職業レベルが上限', getEffectivePlus(sword, 2) === 2 && getEffectivePlus(sword, 99) === 5)
+  const eff = PROGRESSION_CONFIG.plus.effectPerPlus
+  check('+値で装備の基礎値が伸びる', getItemStats(sword, 99).atk === Math.round(10 * (1 + 5 * eff)))
+  check('レベルが低いと+値の効果が頭打ち', getItemStats(sword, 2).atk === Math.round(10 * (1 + 2 * eff)))
+
+  const st = buildPlayerStats({ jobId: 'swordsman', level: 99, slots, itemsById })
+  const job = calcJobStats('swordsman', 99)
+  const expectAtk = Math.round((job.atk + getItemStats(sword, 99).atk) * 1.25 * 1.1)
+  check('ATK＝(職業＋武器)×武器種補正×エンチャント%', st.atk === expectAtk, `(実際: ${st.atk} 期待: ${expectAtk})`)
+  check('防具のDEF・HPが乗る', st.def === job.def + 10 && st.hp === job.hp + 20)
+  check('武器種補正でSPDが変わる（大剣0.8倍）', st.spd === Math.round(job.spd * 0.8))
+  check('追加ステータス（被ダメ軽減・回避・会心ダメージ）が出る',
+    st.damageCut === 5 && st.evasion === 3 && st.critDamagePct === 20)
+
+  // 戦闘に渡すと実際にその値で戦う
+  const battle = createBattle({
+    jobId: 'swordsman', weapon: sword, enemyId: 'goblin', seed: 1,
+    playerStats: buildPlayerStats({ jobId: 'swordsman', level: 1, slots, itemsById }),
+  })
+  const lv1Stats = buildPlayerStats({ jobId: 'swordsman', level: 1, slots, itemsById })
+  check('戦闘のHP/DEF/ATKが装備込みの値になる',
+    battle.player.stats.maxHp === lv1Stats.hp && battle.player.stats.hp === lv1Stats.hp &&
+    battle.player.stats.def === lv1Stats.def && battle.player.stats.atk === lv1Stats.atk)
+  check('戦闘に追加ステータスが渡る', battle.player.stats.damageCut === 5 && battle.player.stats.critDamagePct === 20)
+  const plain = createBattle({ jobId: 'swordsman', weapon: sword, enemyId: 'goblin', seed: 1 })
+  check('playerStats省略時は従来通り（防具が乗らない）', plain.player.stats.def === calcJobStats('swordsman').def)
+}
+
+// ============================================================
+// 9. 合成（+値・素材・引き継ぎ）
+// ============================================================
+console.log('\n【9】合成')
+{
+  check('+値が高いほど次の+1が重い', expToNextPlus(5) > expToNextPlus(1) && expToNextPlus(1) > expToNextPlus(0))
+  const up = addPlusExp({ plus: 0, plusExp: 0 }, expToNextPlus(0) + expToNextPlus(1) + 4)
+  check('合成経験値で+値が上がり、余りが残る', up.plus === 2 && up.plusExp === 4)
+  check('貯めた合成経験値の合計', totalInvestedExp({ plus: 2, plusExp: 4 }) === expToNextPlus(0) + expToNextPlus(1) + 4)
+  check('深い階の欠片ほど経験値が多い', shardExp(3) > shardExp(1))
+  check('装備の素材価値：レア度・産出階で増える',
+    equipMaterialExp({ rarity: 'epic', floor: 1 }) > equipMaterialExp({ rarity: 'common', floor: 1 }) &&
+    equipMaterialExp({ rarity: 'rare', floor: 20 }) > equipMaterialExp({ rarity: 'rare', floor: 1 }))
+  check('育てた装備を素材にすると経験値の一部が引き継がれる',
+    equipMaterialExp({ rarity: 'common', floor: 1, plus: 3, plusExp: 0 }) > equipMaterialExp({ rarity: 'common', floor: 1 }))
+
+  const base = { id: 'b', slot: 'weapon', weaponType: 'sword', rarity: 'rare', name: 'ベース', atk: 12, plus: 0, plusExp: 0,
+    skills: [{ skillId: 'S_A', plus: 0 }], enchants: [{ enchantId: 'atkPct', name: 'ATK+%', kind: 'unlimited', value: 5 }] }
+  const parent = { id: 'p', slot: 'weapon', weaponType: 'bow', rarity: 'epic', name: '親', atk: 20, floor: 5, plus: 0, plusExp: 0,
+    skills: [{ skillId: 'S_B', plus: 1 }, { skillId: 'S_C', plus: 0 }],
+    enchants: [{ enchantId: 'critRatePct', name: '会心率+%', kind: 'capped', value: 2 }, { enchantId: 'atkPct', name: 'ATK+%', kind: 'unlimited', value: 7 }] }
+
+  // 欠片だけ：+値だけ上がり、中身はそのまま
+  const r1 = fuse({ base, shardsUsed: { 1: 3 } })
+  check('欠片だけの合成：経験値が入る', r1.gainedExp === shardExp(1) * 3 && !r1.error)
+  check('欠片だけの合成：スキル・エンチャントは変わらない',
+    r1.item.skills.length === 1 && r1.item.skills[0].skillId === 'S_A' && r1.item.enchants.length === 1 && r1.removedIds.length === 0)
+
+  // 親から引き継ぎ：レア=スキル2枠・エンチャント1枠
+  const sp = buildSkillPool(base, [parent]); const ep = buildEnchantPool(base, [parent])
+  check('候補リスト：ベース＋親の全スキル/エンチャント', sp.length === 3 && ep.length === 3 && sp[0].fromBase && !sp[1].fromBase)
+  const r2 = fuse({ base, parents: [parent], keepSkillKeys: ['b:s0', 'p:s0'], keepEnchantKeys: ['p:e1'] })
+  check('親からスキルを引き継げる（+値つき）',
+    !r2.error && r2.item.skills.length === 2 && r2.item.skills[1].skillId === 'S_B' && r2.item.skills[1].plus === 1)
+  check('エンチャントを親のものに入れ替えられる', r2.item.enchants.length === 1 && r2.item.enchants[0].value === 7)
+  check('親は消える対象になる', r2.removedIds.length === 1 && r2.removedIds[0] === 'p')
+  check('親の素材価値ぶん合成経験値が入る', r2.gainedExp === equipMaterialExp(parent))
+  check('ベースの基礎値・レア度・IDは変わらない', r2.item.id === 'b' && r2.item.atk === 12 && r2.item.rarity === 'rare')
+  check('元のベースを書き換えない', base.skills.length === 1 && base.plus === 0)
+
+  check('枠数オーバーは弾く', Boolean(fuse({ base, parents: [parent], keepSkillKeys: ['b:s0', 'p:s0', 'p:s1'] }).error))
+  check('エンチャント枠オーバーは弾く', Boolean(fuse({ base, parents: [parent], keepEnchantKeys: ['b:e0', 'p:e0'] }).error))
+  const dupParent = { ...parent, id: 'q', skills: [{ skillId: 'S_A', plus: 2 }] }
+  check('同じスキルの重複は弾く', Boolean(fuse({ base, parents: [dupParent], keepSkillKeys: ['b:s0', 'q:s0'] }).error))
+  check('違う部位は親にできない', Boolean(fuse({ base, parents: [{ id: 'x', slot: 'armor', rarity: 'common' }] }).error))
+  check('ベース自身は親にできない', Boolean(fuse({ base, parents: [base] }).error))
+  check('素材なしは弾く', Boolean(fuse({ base }).error))
+  check('引き継ぎ指定なしならベースの現状維持', fuse({ base, parents: [parent] }).item.skills.length === 1)
+
+  // 防具：スキルは持たない
+  const armorBase = { id: 'ab', slot: 'armor', rarity: 'epic', def: 8, hp: 20, skills: [], enchants: [] }
+  const armorParent = { id: 'ap', slot: 'armor', rarity: 'rare', floor: 3, def: 5, hp: 12, skills: [],
+    enchants: [{ enchantId: 'hpPct', name: 'HP+%', kind: 'unlimited', value: 6 }] }
+  const r3 = fuse({ base: armorBase, parents: [armorParent], keepEnchantKeys: ['ap:e0'] })
+  check('防具同士でエンチャントを引き継げる', !r3.error && r3.item.enchants[0].enchantId === 'hpPct' && r3.item.skills.length === 0)
+
+  // ドロップ：素材メイン
+  const rng = createSeededRng(77)
+  let equipG = 0, equipB = 0; const N = 2000; const ids = new Set()
+  for (let i = 0; i < N; i++) {
+    const g = generateDrops({ floor: 3, grade: 'grunt', rng }); if (g.item) { equipG++; ids.add(g.item.id) }
+    const b = generateDrops({ floor: 5, grade: 'boss', rng }); if (b.item) { equipB++; ids.add(b.item.id) }
+    if (i === 0) check('欠片は必ず落ちる（ランクは階層で決まる）', g.shards.count >= 2 && g.shards.tier === 1 && generateDrops({ floor: 6, grade: 'grunt', rng }).shards.tier === 2)
+  }
+  check('雑魚の装備ドロップはたまに（約15%）', equipG / N > 0.1 && equipG / N < 0.2, `(実際: ${(equipG / N * 100).toFixed(1)}%)`)
+  check('ボスは装備確定', equipB === N)
+  check('ドロップ装備のIDが重複しない', ids.size === equipG + equipB)
+
+  // 旧セーブ互換
+  const migrated = migrateItems([{ id: 'old', slot: 'weapon', weaponType: 'sword', atk: 5 }, null, { nope: 1 }])
+  check('旧セーブの装備に+値などの新項目が補われる',
+    migrated.length === 1 && migrated[0].plus === 0 && migrated[0].plusExp === 0 && Array.isArray(migrated[0].enchants) && Array.isArray(migrated[0].skills))
+  check('セーブが壊れていても落ちない', migrateItems('broken').length === 0)
 }
 
 // ============================================================

@@ -1,24 +1,21 @@
 // 装備管理画面（GDD 11番・12番）
-// 拠点から開き、所持している全装備の確認・4スロットへの付け替え・
-// スキル/エンチャントの抽出・移植を行う
+// 拠点から開き、所持している全装備の確認・4スロットへの付け替え・合成（+値の強化と
+// スキル/エンチャントの引き継ぎ）を行う
 // 一覧はスクロール可（本質的に一覧性が必要な部分＝GDD 3番の例外）
 // スキル/エンチャントの表示は共通チップコンポーネントを再利用する
 import { useMemo, useRef, useState } from 'react'
-import { JOBS, calcJobStats } from '../data/jobs.js'
+import { JOBS } from '../data/jobs.js'
 import { WEAPON_TYPES } from '../data/weaponTypes.js'
 import { getElementDef, getElementLabel } from '../data/elements.js'
 import { RARITIES } from '../data/rarities.js'
-import { ENCHANT_RULES } from '../data/itemTemplates.js'
-import { EQUIP_SLOTS, calcTotalStats } from '../systems/equipmentState.js'
+import { PROGRESSION_CONFIG } from '../data/progressionConfig.js'
+import { EQUIP_SLOTS } from '../systems/equipmentState.js'
+import { buildPlayerStats, getItemStats } from '../systems/playerStats.js'
+import { fuse, skillSlotCount, enchantSlotCount, expToNextPlus } from '../systems/fusionSystem.js'
 import { FILTER_STATS, filterAndSortItems, formatStatGain } from '../systems/equipmentFilter.js'
-import {
-  applySkillTransplant,
-  applyEnchantTransplant,
-} from '../systems/extractInventoryState.js'
 import SkillChipList from '../components/common/SkillChipList.jsx'
 import EnchantChipList from '../components/common/EnchantChipList.jsx'
-import ExtractConfirmDialog from '../components/equipment/ExtractConfirmDialog.jsx'
-import TransplantSelector from '../components/equipment/TransplantSelector.jsx'
+import FusionScreen from '../components/equipment/FusionScreen.jsx'
 
 const TAB_DEFS = [
   { key: 'weapon', label: '武器' },
@@ -28,10 +25,12 @@ const TAB_DEFS = [
 
 export default function EquipmentScreen({
   jobId,
+  jobLevel = 1,
   items,
   equipment,
-  extractInv,
-  onRemoveItem,
+  shards = {},
+  onSpendShards,
+  onRemoveItems,
   onUpdateItem,
   onBack,
   onOpenDictionary,
@@ -40,20 +39,19 @@ export default function EquipmentScreen({
   const [filterStat, setFilterStat] = useState(null)  // 絞り込むステータス（null=すべて表示・入手順）
   const [sortOrder, setSortOrder] = useState('desc')  // 'desc'=大きい順 | 'asc'=小さい順
   const [detailItemId, setDetailItemId] = useState(null)
-  const [selectedFrame, setSelectedFrame] = useState(null)     // {kind: 'skill'|'enchant', index}
-  const [extractTarget, setExtractTarget] = useState(null)     // {kind, entry} 確認ダイアログ表示中
-  const [transplantTarget, setTransplantTarget] = useState(null) // {kind, index} セレクター表示中
+  const [fusionBaseId, setFusionBaseId] = useState(null)       // 合成画面を開いているベース装備のID
   const [toast, setToast] = useState(null)                     // {msg, isError}
   const toastTimer = useRef(null)
 
   const job = JOBS[jobId]
   const itemsById = useMemo(() => Object.fromEntries(items.map((it) => [it.id, it])), [items])
-  const baseStats = calcJobStats(jobId)
-  const totalStats = calcTotalStats({ baseStats, slots: equipment.slots, itemsById })
+  // 表示するステータスは戦闘で使われる値そのもの（職業レベル・装備・+値・エンチャント込み）
+  const totalStats = buildPlayerStats({ jobId, level: jobLevel, slots: equipment.slots, itemsById })
   const tabItems = items.filter((it) => it.slot === tab)
   // 絞り込み・並べ替え：上がるステータスを選ぶと、そのステータスが上がる装備だけを上がり幅順に並べる
   const visibleItems = filterAndSortItems(tabItems, { statKey: filterStat, order: sortOrder })
   const detailItem = detailItemId ? itemsById[detailItemId] : null
+  const fusionBase = fusionBaseId ? itemsById[fusionBaseId] : null
 
   const showToast = (msg, isError = false) => {
     setToast({ msg, isError })
@@ -71,43 +69,38 @@ export default function EquipmentScreen({
 
   // ===== 詳細ビューの開閉 =====
 
-  const openDetail = (itemId) => {
-    setDetailItemId(itemId)
-    setSelectedFrame(null)
+  const openDetail = (itemId) => setDetailItemId(itemId)
+  const closeDetail = () => setDetailItemId(null)
+
+  // ===== 合成 =====
+  // 親にできるのは「同じ部位・ベース以外・装備中でない」装備
+  const fusionCandidates = fusionBase
+    ? items.filter((it) => it.slot === fusionBase.slot && it.id !== fusionBase.id && !equipment.equippedSlotOf(it.id))
+    : []
+
+  const doFusion = ({ parents, shardsUsed, keepSkillKeys, keepEnchantKeys }) => {
+    const result = fuse({ base: fusionBase, parents, shardsUsed, keepSkillKeys, keepEnchantKeys })
+    if (result.error) {
+      showToast(`🚫 ${result.error}`, true)
+      return
+    }
+    onUpdateItem(result.item)
+    if (result.removedIds.length > 0) onRemoveItems(result.removedIds)
+    onSpendShards(shardsUsed)
+    setFusionBaseId(null)
+    const before = fusionBase.plus || 0
+    showToast(result.item.plus > before
+      ? `合成成功！ +${before} → +${result.item.plus}`
+      : `合成した（合成経験値 +${result.gainedExp}）`)
   }
-  const closeDetail = () => {
-    setDetailItemId(null)
-    setSelectedFrame(null)
-  }
 
-  // ===== 抽出（確認ダイアログで確定後に実行。元装備は破壊される） =====
-
-  const doExtract = () => {
-    const { kind, entry } = extractTarget
-    if (kind === 'skill') extractInv.addSkill(entry)
-    else extractInv.addEnchant(entry)
-    // 装備中だった場合は該当スロットを空にしてからインベントリから削除する
-    equipment.clearItem(detailItem.id)
-    onRemoveItem(detailItem.id)
-    setExtractTarget(null)
-    closeDetail()
-    showToast(`${kind === 'skill' ? 'スキル' : 'エンチャント'}を抽出した（元の装備は破壊）`)
-  }
-
-  // ===== 移植（セレクター側でバリデーション済み。使った抽出物は消費される） =====
-
-  const applyTransplant = (entry) => {
-    const { kind, index } = transplantTarget
-    const nextItem =
-      kind === 'skill'
-        ? applySkillTransplant({ item: detailItem, targetIndex: index, entry })
-        : applyEnchantTransplant({ item: detailItem, targetIndex: index, entry })
-    onUpdateItem(nextItem)
-    if (kind === 'skill') extractInv.removeSkill(entry.extractId)
-    else extractInv.removeEnchant(entry.extractId)
-    setTransplantTarget(null)
-    setSelectedFrame(null)
-    showToast('移植した')
+  // +値つきの表示名／+値の効果込みのステータス文字列
+  const displayName = (item) => `${item.name}${item.plus > 0 ? ` +${item.plus}` : ''}`
+  const statLine = (item) => {
+    const st = getItemStats(item, jobLevel)
+    if (item.slot === 'weapon') return `${WEAPON_TYPES[item.weaponType].name} ／ ATK+${st.atk}`
+    if (item.slot === 'armor') return `DEF+${st.def}・HP+${st.hp}`
+    return `HP+${st.hp}・MP+${st.mp}`
   }
 
   // ===== 描画部品 =====
@@ -128,7 +121,7 @@ export default function EquipmentScreen({
       >
         <div className="weapon-head">
           <span>
-            {item.slot === 'weapon' ? WEAPON_TYPES[item.weaponType].icon : item.icon} {item.name}
+            {item.slot === 'weapon' ? WEAPON_TYPES[item.weaponType].icon : item.icon} {displayName(item)}
             {equippedSlot && (
               <span className="equip-badge">装備中：{EQUIP_SLOTS.find((s) => s.key === equippedSlot).name}</span>
             )}
@@ -140,10 +133,7 @@ export default function EquipmentScreen({
           <div className="sort-key-badge">{formatStatGain(item, filterStat)}</div>
         )}
         <div className="weapon-meta">
-          {elem.icon}{getElementLabel(item.element)}
-          {item.slot === 'weapon' && ` ／ ${WEAPON_TYPES[item.weaponType].name} ／ ATK+${item.atk}`}
-          {item.slot === 'armor' && ` ／ DEF+${item.def}・HP+${item.hp}`}
-          {item.slot === 'accessory' && ` ／ HP+${item.hp}・MP+${item.mp}`}
+          {elem.icon}{getElementLabel(item.element)} ／ {statLine(item)}
           {item.floor != null && ` ／ ${item.floor}階産`}
         </div>
         {/* スキル/エンチャントは共通チップで表示（タップで詳細ポップアップ） */}
@@ -161,11 +151,20 @@ export default function EquipmentScreen({
     const slotDefs = EQUIP_SLOTS.filter((s) => s.accepts === item.slot)
     const jobBlocked =
       item.slot === 'weapon' && !job.equipableWeaponTypes.includes(item.weaponType)
+    const fusionBtn = (
+      <button
+        className="quick-equip-btn fusion"
+        onClick={(ev) => { ev.stopPropagation(); setFusionBaseId(item.id) }}
+      >
+        ⚒ 合成
+      </button>
+    )
     if (jobBlocked) {
       return (
-        <div className="quick-equip">
-          <span className="equip-block-note">🚫 {job.name}は{WEAPON_TYPES[item.weaponType].name}を装備できない</span>
-        </div>
+        <>
+          <div className="equip-block-note">🚫 {job.name}は{WEAPON_TYPES[item.weaponType].name}を装備できない</div>
+          <div className="quick-equip">{fusionBtn}</div>
+        </>
       )
     }
     return (
@@ -189,6 +188,7 @@ export default function EquipmentScreen({
             </button>
           )
         )}
+        {fusionBtn}
       </div>
     )
   }
@@ -231,18 +231,12 @@ export default function EquipmentScreen({
     )
   }
 
-  // 詳細ビュー（枠選択→抽出・移植の起点。全画面オーバーレイ）
+  // 詳細ビュー（全画面オーバーレイ）：装備の中身の確認・付け替え・合成への入口
   const renderDetail = (item) => {
     const rarity = RARITIES[item.rarity]
     const elem = getElementDef(item.element) // 初期装備はelement=null（無属性）
-    const skillSlots = item.slot === 'weapon' ? RARITIES[item.rarity].skillSlots : 0
-    const enchantSlots = ENCHANT_RULES.slotsByRarity[item.rarity] ?? 0
-    // 選択中の枠の中身（空き枠ならnull）
-    const frameEntry = selectedFrame
-      ? (selectedFrame.kind === 'skill'
-          ? item.skills?.[selectedFrame.index]
-          : item.enchants?.[selectedFrame.index]) || null
-      : null
+    const plus = item.plus || 0
+    const capped = plus > jobLevel
 
     return (
       <div className="equip-detail">
@@ -254,69 +248,44 @@ export default function EquipmentScreen({
           <div className="loot-card" style={{ borderColor: rarity.color }}>
             <div className="loot-head">
               <span className="loot-name">
-                {item.slot === 'weapon' ? WEAPON_TYPES[item.weaponType].icon : item.icon} {item.name}
+                {item.slot === 'weapon' ? WEAPON_TYPES[item.weaponType].icon : item.icon} {displayName(item)}
               </span>
               <span className="loot-rarity" style={{ color: rarity.color }}>{rarity.name}</span>
             </div>
             <div className="loot-meta">
-              {elem.icon}{getElementLabel(item.element)}
-              {item.slot === 'weapon' && ` ／ ${WEAPON_TYPES[item.weaponType].name} ／ ATK+${item.atk}`}
-              {item.slot === 'armor' && ` ／ DEF+${item.def}・HP+${item.hp}`}
-              {item.slot === 'accessory' && ` ／ HP+${item.hp}・MP+${item.mp}`}
+              {elem.icon}{getElementLabel(item.element)} ／ {statLine(item)}
               {item.floor != null && ` ／ ${item.floor}階産`}
             </div>
+            <div className="loot-meta">
+              +値 {plus}（次の+1まで合成経験値 {expToNextPlus(plus) - (item.plusExp || 0)}）
+            </div>
+            {capped && (
+              <div className="depart-note fusion-cap-note">
+                ⚠️ {job.name}はLv{jobLevel}なので、効果が出ているのは +{jobLevel} ぶんまで
+              </div>
+            )}
           </div>
 
           {renderEquipButtons(item)}
+          <button className="equip-action-btn fusion" onClick={() => setFusionBaseId(item.id)}>
+            ⚒ この装備をベースに合成する
+          </button>
 
-          {/* スキル枠（武器のみ）：枠選択モードで空き枠も表示 */}
           {item.slot === 'weapon' && (
             <>
-              <h2 className="section-label">スキル枠（{skillSlots}枠）</h2>
-              <SkillChipList
-                skills={item.skills}
-                slotCount={skillSlots}
-                selectedSlot={selectedFrame?.kind === 'skill' ? selectedFrame.index : null}
-                onSelectSlot={(i) => setSelectedFrame({ kind: 'skill', index: i })}
-                onOpenDictionary={onOpenDictionary}
-              />
+              <h2 className="section-label">スキル（{(item.skills || []).length}/{skillSlotCount(item)}枠）</h2>
+              <SkillChipList skills={item.skills} onOpenDictionary={onOpenDictionary} />
             </>
           )}
-
-          {/* エンチャント枠：枠選択モードで空き枠も表示（コモンは枠なし） */}
-          <h2 className="section-label">エンチャント枠（{enchantSlots}枠）</h2>
-          {enchantSlots === 0 && (item.enchants || []).length === 0 ? (
+          <h2 className="section-label">エンチャント（{(item.enchants || []).length}/{enchantSlotCount(item)}枠）</h2>
+          {enchantSlotCount(item) === 0 ? (
             <div className="equip-hint">このレア度にはエンチャント枠がない</div>
           ) : (
-            <EnchantChipList
-              enchants={item.enchants}
-              slotCount={enchantSlots}
-              selectedSlot={selectedFrame?.kind === 'enchant' ? selectedFrame.index : null}
-              onSelectSlot={(i) => setSelectedFrame({ kind: 'enchant', index: i })}
-            />
+            <EnchantChipList enchants={item.enchants} />
           )}
-
-          {/* 枠を選択すると抽出・変更（移植）ボタンが出る */}
-          {selectedFrame ? (
-            <div className="frame-actions">
-              {frameEntry && (
-                <button
-                  className="equip-action-btn extract"
-                  onClick={() => setExtractTarget({ kind: selectedFrame.kind, entry: frameEntry })}
-                >
-                  🔮 この枠を抽出する（装備は破壊）
-                </button>
-              )}
-              <button
-                className="equip-action-btn"
-                onClick={() => setTransplantTarget({ ...selectedFrame })}
-              >
-                🔁 この枠を変更する（移植）
-              </button>
-            </div>
-          ) : (
-            <div className="equip-hint">枠をタップして選ぶと、抽出・変更（移植）ができる</div>
-          )}
+          <div className="equip-hint">
+            スキル・エンチャントは合成で他の装備から引き継げる（{PROGRESSION_CONFIG.material.shardName}だけの合成なら+値だけ上がる）
+          </div>
         </div>
       </div>
     )
@@ -343,7 +312,7 @@ export default function EquipmentScreen({
                 <span className="equip-slot-label">{slotDef.name}</span>
                 <span className="equip-slot-item">
                   {item
-                    ? `${item.slot === 'weapon' ? WEAPON_TYPES[item.weaponType].icon : item.icon} ${item.name}`
+                    ? `${item.slot === 'weapon' ? WEAPON_TYPES[item.weaponType].icon : item.icon} ${displayName(item)}`
                     : 'なし'}
                 </span>
               </button>
@@ -353,21 +322,20 @@ export default function EquipmentScreen({
 
         {/* 装備込みのステータス合計（職業ベース＋装備＋エンチャント） */}
         <div className="stat-row equip-stat-row">
-          <span className="equip-stat-owner">{job.icon} {job.name}（装備込み）</span>
+          <span className="equip-stat-owner">{job.icon} {job.name} Lv{jobLevel}（装備込み）</span>
           HP{totalStats.hp}／MP{totalStats.mp}／ATK{totalStats.atk}／DEF{totalStats.def}／SPD{totalStats.spd}／会心{totalStats.crit}%
         </div>
 
-        {/* 抽出インベントリ（抽出したスキル/エンチャントの在庫。チップをタップで詳細） */}
-        <h2 className="section-label">抽出インベントリ</h2>
-        {extractInv.skills.length === 0 && extractInv.enchants.length === 0 ? (
-          <div className="equip-hint">まだ何も抽出していない。アイテム詳細の枠から抽出できる</div>
+        {/* 合成素材（欠片）の所持数 */}
+        <h2 className="section-label">合成素材</h2>
+        {Object.keys(shards).length === 0 ? (
+          <div className="equip-hint">{PROGRESSION_CONFIG.material.shardName}をまだ持っていない。敵を倒すと手に入る</div>
         ) : (
-          <>
-            {extractInv.skills.length > 0 && (
-              <SkillChipList skills={extractInv.skills} onOpenDictionary={onOpenDictionary} />
-            )}
-            {extractInv.enchants.length > 0 && <EnchantChipList enchants={extractInv.enchants} />}
-          </>
+          <div className="chip-list">
+            {Object.keys(shards).map(Number).sort((x, y) => x - y).map((tier) => (
+              <span key={tier} className="skill-chip shard-chip">🔷 ランク{tier} ×{shards[tier]}</span>
+            ))}
+          </div>
         )}
 
         {/* 種別タブ＋所持アイテム一覧 */}
@@ -427,25 +395,16 @@ export default function EquipmentScreen({
       {/* アイテム詳細（全画面オーバーレイ） */}
       {detailItem && renderDetail(detailItem)}
 
-      {/* 抽出の確認ダイアログ（不可逆操作なので必ず挟む） */}
-      {extractTarget && detailItem && (
-        <ExtractConfirmDialog
-          item={detailItem}
-          target={extractTarget}
-          onConfirm={doExtract}
-          onCancel={() => setExtractTarget(null)}
-        />
-      )}
-
-      {/* 移植セレクター（対象枠の種類に応じたインベントリのみ表示） */}
-      {transplantTarget && detailItem && (
-        <TransplantSelector
-          item={detailItem}
-          target={transplantTarget}
-          candidates={transplantTarget.kind === 'skill' ? extractInv.skills : extractInv.enchants}
-          onApply={applyTransplant}
-          onCancel={() => setTransplantTarget(null)}
-          onOpenDictionary={onOpenDictionary}
+      {/* 合成画面（全画面オーバーレイ。詳細より上に重ねる） */}
+      {fusionBase && (
+        <FusionScreen
+          key={fusionBase.id}
+          base={fusionBase}
+          candidates={fusionCandidates}
+          shards={shards}
+          jobLevel={jobLevel}
+          onConfirm={doFusion}
+          onCancel={() => setFusionBaseId(null)}
         />
       )}
 

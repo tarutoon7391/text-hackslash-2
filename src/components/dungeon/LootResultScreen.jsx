@@ -1,45 +1,65 @@
-// 勝利リザルト画面：獲得したドロップ装備の内容を表示し、「次の階へ」or「ロビーに戻る」を選ぶ
-// スキル/エンチャントはロビーと同じ共通チップコンポーネントで表示する
-// （SkillChipList→SkillDetailPopup／EnchantChipList→EnchantDetailPopup）
-import { ELEMENTS } from '../../data/elements.js'
+// 勝利リザルト画面：獲得した経験値・欠片・（落ちていれば）装備を表示し、「次の階へ」or「ロビーに戻る」を選ぶ
+// ドロップは素材（欠片）メイン。装備は雑魚だとたまに、ボスは確定で落ちる
+// スキル/エンチャントは共通チップコンポーネントで表示する
+import { getElementDef, getElementLabel } from '../../data/elements.js'
 import { RARITIES } from '../../data/rarities.js'
 import { WEAPON_TYPES } from '../../data/weaponTypes.js'
+import { PROGRESSION_CONFIG } from '../../data/progressionConfig.js'
 import SkillChipList from '../common/SkillChipList.jsx'
 import EnchantChipList from '../common/EnchantChipList.jsx'
 
 const SLOT_LABELS = { weapon: '武器', armor: '防具', accessory: 'アクセサリー' }
 
-export default function LootResultScreen({ item, floor, onNext, onLobby, onOpenDictionary }) {
-  const rarity = RARITIES[item.rarity]
-  const elem = ELEMENTS[item.element]
+export default function LootResultScreen({ result, jobName, onNext, onLobby, onOpenDictionary }) {
+  const { floor, item, shards, exp, levelBefore, levelAfter } = result
+  const rarity = item ? RARITIES[item.rarity] : null
+  const leveledUp = levelAfter > levelBefore
 
   return (
     <div className="loot-screen">
       <div className="loot-banner">🎉 勝利！</div>
-      <div className="loot-drop-label">ドロップ獲得</div>
 
-      <div className="loot-card" style={{ borderColor: rarity.color }}>
-        <div className="loot-head">
-          <span className="loot-name">
-            {item.slot === 'weapon' ? WEAPON_TYPES[item.weaponType].icon : item.icon} {item.name}
-          </span>
-          <span className="loot-rarity" style={{ color: rarity.color }}>{rarity.name}</span>
+      {/* 経験値と素材（毎回もらえる） */}
+      <div className="loot-gains">
+        <div className="loot-gain-row">
+          <span>{jobName} 経験値</span>
+          <span className="loot-gain-value">+{exp}</span>
         </div>
-        <div className="loot-meta">
-          {elem.icon}{elem.name}属性 ／ {SLOT_LABELS[item.slot]}
-          {item.slot === 'weapon' && ` ／ ATK+${item.atk}`}
-          {item.slot === 'armor' && ` ／ DEF+${item.def}・HP+${item.hp}`}
-          {item.slot === 'accessory' && ` ／ HP+${item.hp}・MP+${item.mp}`}
-        </div>
-
-        {/* スキル構成（武器のみ）：チップ形式。タップで詳細ポップアップ */}
-        {item.slot === 'weapon' && (
-          <SkillChipList skills={item.skills} onOpenDictionary={onOpenDictionary} />
+        {leveledUp && (
+          <div className="loot-levelup">⬆ レベルアップ！ Lv{levelBefore} → Lv{levelAfter}</div>
         )}
-
-        {/* エンチャント構成：チップ形式。タップで詳細 */}
-        <EnchantChipList enchants={item.enchants} />
+        <div className="loot-gain-row">
+          <span>🔷 {PROGRESSION_CONFIG.material.shardName}（ランク{shards.tier}）</span>
+          <span className="loot-gain-value">×{shards.count}</span>
+        </div>
       </div>
+
+      {/* 装備ドロップ（落ちた時だけ） */}
+      {item ? (
+        <>
+          <div className="loot-drop-label">装備ドロップ！</div>
+          <div className="loot-card" style={{ borderColor: rarity.color }}>
+            <div className="loot-head">
+              <span className="loot-name">
+                {item.slot === 'weapon' ? WEAPON_TYPES[item.weaponType].icon : item.icon} {item.name}
+              </span>
+              <span className="loot-rarity" style={{ color: rarity.color }}>{rarity.name}</span>
+            </div>
+            <div className="loot-meta">
+              {getElementDef(item.element).icon}{getElementLabel(item.element)} ／ {SLOT_LABELS[item.slot]}
+              {item.slot === 'weapon' && ` ／ ATK+${item.atk}`}
+              {item.slot === 'armor' && ` ／ DEF+${item.def}・HP+${item.hp}`}
+              {item.slot === 'accessory' && ` ／ HP+${item.hp}・MP+${item.mp}`}
+            </div>
+            {item.slot === 'weapon' && (
+              <SkillChipList skills={item.skills} onOpenDictionary={onOpenDictionary} />
+            )}
+            <EnchantChipList enchants={item.enchants} />
+          </div>
+        </>
+      ) : (
+        <div className="equip-hint loot-no-equip">装備は落ちなかった（ボスは必ず装備を落とす）</div>
+      )}
 
       <div className="dungeon-actions">
         <button className="start-btn" onClick={onNext}>次の階へ進む（{floor + 1}階）</button>

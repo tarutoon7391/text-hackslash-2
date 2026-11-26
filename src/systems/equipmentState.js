@@ -2,10 +2,11 @@
 // プレイヤーの4スロット（武器1／防具1／アクセサリー2）をReact stateで管理する
 // スロットにはアイテムIDのみ持ち、実体はinventoryStateの配列から引く
 // （移植でアイテムが書き換わっても参照切れしないようにするため）
-import { useState } from 'react'
+import { usePersistentState } from './saveStorage.js'
 import { JOBS } from '../data/jobs.js'
 import { WEAPON_TYPES } from '../data/weaponTypes.js'
 import { STARTER_ARMOR_ID, starterWeaponIdFor } from '../data/starterEquipment.js'
+import { computeStats } from './playerStats.js'
 
 // 4スロットの定義（key=スロット識別子、accepts=受け入れる部位）
 export const EQUIP_SLOTS = [
@@ -32,43 +33,13 @@ export function checkEquip({ jobId, slotKey, item }) {
 }
 
 // 装備込みのステータス合計を計算する（GDD 7番の6種：HP/MP/ATK/DEF/SPD/会心率）
-// 職業ベース値＋装備の基礎ステータス（フラット加算）→ 青天井組%を乗算 → 会心率+%を加算
-// ※戦闘への反映はフェーズ3後半。ここは表示用の集計のみでbattleEngineには触らない
+// 計算の本体はplayerStats.jsのcomputeStats（戦闘と同じ式）。こちらは基礎値を直接渡す版で、
+// 武器種補正なし・+値の上限なしの素の合算を返す（スモークテスト・検証用）
+// 画面表示と戦闘にはbuildPlayerStats（職業レベル・武器種補正込み）を使うこと
 export function calcTotalStats({ baseStats, slots, itemsById }) {
-  const flat = { hp: 0, mp: 0, atk: 0, def: 0, spd: 0 }
-  const pct = { hp: 0, mp: 0, atk: 0, def: 0, spd: 0 }
-  let critAdd = 0
-
-  for (const { key } of EQUIP_SLOTS) {
-    const item = itemsById[slots[key]]
-    if (!item) continue
-    // 装備の基礎ステータス（武器=ATK、防具=DEF/HP、アクセ=HP/MP）
-    flat.atk += item.atk || 0
-    flat.def += item.def || 0
-    flat.hp += item.hp || 0
-    flat.mp += item.mp || 0
-    // エンチャント効果のうち6ステータスに対応するもの
-    // （スキル威力+%・会心ダメージ+%・回避+%等はステータス表示の対象外）
-    for (const en of item.enchants || []) {
-      switch (en.enchantId) {
-        case 'hpPct': pct.hp += en.value; break
-        case 'mpPct': pct.mp += en.value; break
-        case 'atkPct': pct.atk += en.value; break
-        case 'defPct': pct.def += en.value; break
-        case 'spdPct': pct.spd += en.value; break
-        case 'critRatePct': critAdd += en.value; break
-        default: break
-      }
-    }
-  }
-
-  const total = {}
-  for (const stat of ['hp', 'mp', 'atk', 'def', 'spd']) {
-    total[stat] = Math.round((baseStats[stat] + flat[stat]) * (1 + pct[stat] / 100))
-  }
-  // 会心率は渋カーブ組（100%上限の有限ステータス）なので加算＋上限クリップ
-  total.crit = Math.min(100, baseStats.crit + critAdd)
-  return total
+  const equippedItems = EQUIP_SLOTS.map(({ key }) => itemsById[slots[key]]).filter(Boolean)
+  const { hp, mp, atk, def, spd, crit } = computeStats({ baseStats, equippedItems })
+  return { hp, mp, atk, def, spd, crit }
 }
 
 // 職業選択時のスロット遷移（フェーズ3パート3。純関数＝スモークテスト対象）
@@ -110,10 +81,11 @@ export function applyJobChangeToSlots({ slots, jobId, items, hasEquippedBefore }
 const EMPTY_SLOTS = { weapon: null, armor: null, accessory1: null, accessory2: null }
 
 export function useEquipmentState() {
-  const [slots, setSlots] = useState(EMPTY_SLOTS)
+  // 旧セーブ互換：スロットが増減していても4スロットの形に揃える
+  const [slots, setSlots] = usePersistentState('equipSlots', EMPTY_SLOTS, (saved) => ({ ...EMPTY_SLOTS, ...(saved || {}) }))
   // 初回装備フラグ：一度でも装備（手動装備 or 初回自動装備）したらtrue
   // falseのうちに職業を選ぶと初期装備の自動装備が走る（applyJobChangeToSlots）
-  const [hasEquippedBefore, setHasEquippedBefore] = useState(false)
+  const [hasEquippedBefore, setHasEquippedBefore] = usePersistentState('hasEquippedBefore', false, Boolean)
 
   // 装備する。武器種制限に違反する場合はエラーメッセージを返して何もしない
   // 同じアイテムが別スロットに装備済みなら外してから付け替える（アクセ1⇔2の移動用）
@@ -138,7 +110,7 @@ export function useEquipmentState() {
     setSlots((prev) => ({ ...prev, [slotKey]: null }))
   }
 
-  // 指定アイテムを全スロットから外す（抽出でアイテムが破壊されたとき用）
+  // 指定アイテムを全スロットから外す（アイテムが消えるとき用）
   const clearItem = (itemId) => {
     setSlots((prev) => {
       const next = { ...prev }

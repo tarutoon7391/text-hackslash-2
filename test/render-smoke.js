@@ -2,8 +2,8 @@
 // viteのSSR変換を使ってJSXコンポーネントをNode上で読み込み、renderToStringで
 // 初期描画がクラッシュしないことを確認する（タップ操作後の分岐は対象外）
 // - ロビー（App）
-// - 装備管理画面（ドロップ品あり・スロット/タブ/抽出インベントリ）
-// - 抽出確認ダイアログ／移植セレクター
+// - 装備管理画面（ドロップ品あり・スロット/タブ/合成素材）
+// - 合成画面／勝利リザルト
 
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -48,7 +48,6 @@ try {
   console.log('\n====== 2. 装備管理画面 ======')
   const { default: EquipmentScreen } = await server.ssrLoadModule('/src/pages/EquipmentScreen.jsx')
   const { useEquipmentState } = await server.ssrLoadModule('/src/systems/equipmentState.js')
-  const { useExtractInventoryState } = await server.ssrLoadModule('/src/systems/extractInventoryState.js')
   const { generateLoot } = await server.ssrLoadModule('/src/systems/lootSystem.js')
   const { createSeededRng } = await server.ssrLoadModule('/src/systems/weaponGenerator.js')
   const { createStarterEquipment } = await server.ssrLoadModule('/src/data/starterEquipment.js')
@@ -65,13 +64,14 @@ try {
   // フックはコンポーネント内でしか呼べないため、ラッパー経由で実体を渡す
   function EquipmentWrapper() {
     const equipment = useEquipmentState()
-    const extractInv = useExtractInventoryState()
     return React.createElement(EquipmentScreen, {
       jobId: 'swordsman',
+      jobLevel: 3,
       items,
       equipment,
-      extractInv,
-      onRemoveItem: () => {},
+      shards: { 1: 5, 2: 2 },
+      onSpendShards: () => {},
+      onRemoveItems: () => {},
       onUpdateItem: () => {},
       onBack: () => {},
       onOpenDictionary: () => {},
@@ -83,19 +83,19 @@ try {
     ['武器', '防具', 'アクセ1', 'アクセ2'].every((label) => eqHtml.includes(label)))
   check('ステータス合計が表示される', eqHtml.includes('装備込み') && eqHtml.includes('会心'))
   check('種別タブが表示される', eqHtml.includes('武器（') && eqHtml.includes('防具（') && eqHtml.includes('アクセ（'))
-  check('抽出インベントリの案内が表示される', eqHtml.includes('抽出インベントリ'))
+  check('合成素材（欠片）の所持数が表示される', eqHtml.includes('合成素材') && eqHtml.includes('ランク1 ×5'))
+  check('一覧に合成ボタンがある', eqHtml.includes('⚒ 合成'))
+  check('職業レベルが表示される', eqHtml.includes('剣士 Lv3'))
   check('初期装備（無属性）が描画できる', eqHtml.includes('なめし革の剣') && eqHtml.includes('無属性'))
 
   // 所持ゼロでも落ちない
   function EmptyWrapper() {
     const equipment = useEquipmentState()
-    const extractInv = useExtractInventoryState()
     return React.createElement(EquipmentScreen, {
       jobId: 'mage',
       items: [],
       equipment,
-      extractInv,
-      onRemoveItem: () => {},
+      onRemoveItems: () => {},
       onUpdateItem: () => {},
       onBack: () => {},
       onOpenDictionary: () => {},
@@ -105,50 +105,44 @@ try {
   check('所持ゼロでも描画できる', emptyHtml.includes('ドロップを集めよう'))
 
   // ============================================================
-  console.log('\n====== 3. 抽出確認ダイアログ／移植セレクター ======')
-  const { default: ExtractConfirmDialog } = await server.ssrLoadModule('/src/components/equipment/ExtractConfirmDialog.jsx')
-  const { default: TransplantSelector } = await server.ssrLoadModule('/src/components/equipment/TransplantSelector.jsx')
+  console.log('\n====== 3. 合成画面／勝利リザルト ======')
+  const { default: FusionScreen } = await server.ssrLoadModule('/src/components/equipment/FusionScreen.jsx')
+  const { default: LootResultScreen } = await server.ssrLoadModule('/src/components/dungeon/LootResultScreen.jsx')
 
-  const weapon = items.find((it) => it.slot === 'weapon' && it.skills.length > 0)
-  const enchanted = items.find((it) => (it.enchants || []).length > 0)
-  check('テスト用の武器・エンチャント付き装備がある', Boolean(weapon && enchanted))
-
-  const skillDlg = render(React.createElement(ExtractConfirmDialog, {
-    item: weapon,
-    target: { kind: 'skill', entry: weapon.skills[0] },
+  const weapons = items.filter((it) => it.slot === 'weapon')
+  const base = { ...weapons[0], plus: 2, plusExp: 5 }
+  const fusionHtml = render(React.createElement(FusionScreen, {
+    base,
+    candidates: weapons.slice(1),
+    shards: { 1: 5, 3: 1 },
+    jobLevel: 1,
     onConfirm: () => {},
     onCancel: () => {},
   }))
-  check('抽出確認（スキル）に破壊警告が出る', skillDlg.includes('破壊される'))
+  check('合成画面が描画できる', fusionHtml.includes('⚒ 合成') && fusionHtml.includes('親にする装備（消える）'))
+  check('ベースの+値が表示される', fusionHtml.includes('+2'))
+  check('欠片の行が表示される', fusionHtml.includes('ランク1') && fusionHtml.includes('0/5'))
+  check('残すスキルの枠が表示される', fusionHtml.includes('残すスキル'))
+  check('素材未選択では合成ボタンが押せない', /<button class="start-btn" disabled="">/.test(fusionHtml))
 
-  const enchantDlg = render(React.createElement(ExtractConfirmDialog, {
-    item: enchanted,
-    target: { kind: 'enchant', entry: enchanted.enchants[0] },
-    onConfirm: () => {},
-    onCancel: () => {},
+  const armorBase = items.find((it) => it.slot === 'armor')
+  const armorFusion = render(React.createElement(FusionScreen, {
+    base: armorBase, candidates: [], shards: {}, jobLevel: 1, onConfirm: () => {}, onCancel: () => {},
   }))
-  check('抽出確認（エンチャント）が描画できる', enchantDlg.includes('エンチャントを抽出する？'))
+  check('防具・素材ゼロでも合成画面が描画できる',
+    armorFusion.includes('欠片を持っていない') && armorFusion.includes('親にできる装備がない') && !armorFusion.includes('残すスキル'))
 
-  const skillSelector = render(React.createElement(TransplantSelector, {
-    item: weapon,
-    target: { kind: 'skill', index: 0 },
-    candidates: [{ extractId: 'ext_t1', skillId: weapon.skills[0].skillId, plus: 1 }],
-    onApply: () => {},
-    onCancel: () => {},
-    onOpenDictionary: () => {},
+  const lootWithItem = render(React.createElement(LootResultScreen, {
+    result: { floor: 5, item: weapons[0], shards: { tier: 1, count: 7 }, exp: 105, levelBefore: 2, levelAfter: 4 },
+    jobName: '剣士', onNext: () => {}, onLobby: () => {}, onOpenDictionary: () => {},
   }))
-  check('移植セレクター（スキル）が描画できる', skillSelector.includes('移植するスキルを選ぶ'))
-  check('上書き消滅の警告が出る', skillSelector.includes('上書きで消滅する'))
-
-  const emptySelector = render(React.createElement(TransplantSelector, {
-    item: weapon,
-    target: { kind: 'enchant', index: 0 },
-    candidates: [],
-    onApply: () => {},
-    onCancel: () => {},
-    onOpenDictionary: () => {},
+  check('リザルト：経験値・レベルアップ・欠片・装備が出る',
+    lootWithItem.includes('+105') && lootWithItem.includes('Lv2 → Lv4') && lootWithItem.includes('×7') && lootWithItem.includes('装備ドロップ'))
+  const lootNoItem = render(React.createElement(LootResultScreen, {
+    result: { floor: 2, item: null, shards: { tier: 1, count: 2 }, exp: 16, levelBefore: 1, levelAfter: 1 },
+    jobName: '剣士', onNext: () => {}, onLobby: () => {}, onOpenDictionary: () => {},
   }))
-  check('抽出物ゼロの移植セレクターも描画できる', emptySelector.includes('まだ無い'))
+  check('リザルト：装備なしでも描画できる', lootNoItem.includes('装備は落ちなかった') && !lootNoItem.includes('レベルアップ'))
 } finally {
   await server.close()
 }

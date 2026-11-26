@@ -1192,3 +1192,80 @@ body::after {
   font-weight: bold;
   text-shadow: 0 0 6px var(--accent);
 }
+
+/* ===== 成長（職業レベル・素材・合成） ===== */
+.job-level { font-size: 10px; color: var(--accent); }
+.job-exp-line { display: flex; justify-content: space-between; color: var(--text); font-weight: bold; margin-bottom: 4px; }
+.job-exp { color: var(--muted); font-weight: normal; }
+
+/* リザルト：経験値・欠片 */
+.loot-gains {
+  border: 1px solid var(--text);
+  background: var(--panel);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  box-shadow: 0 0 8px #00ff4166;
+}
+.loot-gain-row { display: flex; justify-content: space-between; font-size: 13px; }
+.loot-gain-value { color: var(--special); font-weight: bold; }
+.loot-levelup {
+  text-align: center;
+  color: var(--special);
+  font-weight: bold;
+  letter-spacing: 2px;
+  text-shadow: 0 0 8px var(--special);
+  animation: targetPulse 1.1s ease-in-out 2;
+}
+.loot-no-equip { text-align: center; }
+
+/* 欠片チップ・合成ボタン */
+.shard-chip { cursor: default; border-left-color: var(--accent); color: var(--accent); }
+.quick-equip-btn.fusion, .equip-action-btn.fusion { border-color: var(--special); color: var(--special); }
+.quick-equip-btn.fusion { flex: 0 0 84px; }
+.quick-equip-btn.fusion:hover, .quick-equip-btn.fusion:active { background: #ffdd0022; box-shadow: 0 0 8px var(--special); }
+
+/* 合成画面 */
+.fusion-screen { z-index: 12; }
+.fusion-preview { margin-top: 8px; display: flex; flex-direction: column; gap: 4px; }
+.fusion-plus { font-size: 22px; font-weight: bold; }
+.fusion-plus-after { color: var(--special); text-shadow: 0 0 8px var(--special); }
+.fusion-bar { background: var(--special); }
+.fusion-exp-line { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); }
+.fusion-cap-note { text-align: left; margin-top: 4px; }
+
+.shard-row { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+.shard-name { flex: 1; font-size: 12px; }
+.shard-name small { color: var(--muted); }
+.shard-count { min-width: 52px; text-align: center; font-size: 13px; font-weight: bold; }
+.shard-btn {
+  min-width: 44px;
+  min-height: 44px;
+  background: var(--panel);
+  border: 1px solid var(--text);
+  font-size: 16px;
+  font-weight: bold;
+}
+.shard-btn.shard-all { font-size: 11px; padding: 0 8px; border-color: var(--accent); color: var(--accent); }
+
+.parent-card {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  width: 100%;
+  text-align: left;
+  padding: 8px 10px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+}
+.parent-card.selected { border-color: var(--danger); box-shadow: 0 0 8px #ff444466, inset 0 0 8px #ff444422; }
+.parent-head { display: flex; justify-content: space-between; font-size: 13px; font-weight: bold; }
+.parent-meta { font-size: 10px; color: var(--muted); }
+
+.keep-chip { min-height: 36px; }
+.keep-chip.off { opacity: 0.45; }
+.keep-chip.selected { outline: 1px solid var(--accent); }
+.keep-chip small { color: var(--special); }
+
+.fusion-confirm { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; }
