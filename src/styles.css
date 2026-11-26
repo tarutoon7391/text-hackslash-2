@@ -1279,3 +1279,8 @@ body::after {
   flex-shrink: 0;
   image-rendering: pixelated;
 }
+
+/* ===== 探索中のHP持ち越し表示 ===== */
+.run-hp { border: 1px solid var(--line); background: var(--panel); padding: 8px 10px; }
+.run-hp-note { font-size: 10px; color: var(--muted); margin-top: 4px; }
+.loot-gain-value.low { color: var(--danger); }

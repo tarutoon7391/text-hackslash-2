@@ -312,6 +312,14 @@ console.log('\n【8】職業レベル・実ステータス')
     battle.player.stats.maxHp === lv1Stats.hp && battle.player.stats.hp === lv1Stats.hp &&
     battle.player.stats.def === lv1Stats.def && battle.player.stats.atk === lv1Stats.atk)
   check('戦闘に追加ステータスが渡る', battle.player.stats.damageCut === 5 && battle.player.stats.critDamagePct === 20)
+  // HPの持ち越し
+  const carried = createBattle({ jobId: 'swordsman', weapon: sword, enemyId: 'goblin', seed: 1, playerStats: lv1Stats, startHp: 37 })
+  check('startHpを渡すと残りHPから始まる（最大HPはそのまま）',
+    carried.player.stats.hp === 37 && carried.player.stats.maxHp === lv1Stats.hp)
+  check('startHpは最大HPを超えない・最低1',
+    createBattle({ jobId: 'swordsman', weapon: sword, enemyId: 'goblin', seed: 1, playerStats: lv1Stats, startHp: 99999 }).player.stats.hp === lv1Stats.hp &&
+    createBattle({ jobId: 'swordsman', weapon: sword, enemyId: 'goblin', seed: 1, playerStats: lv1Stats, startHp: 0 }).player.stats.hp === 1)
+  check('startHp省略時は満タンで始まる', battle.player.stats.hp === battle.player.stats.maxHp)
   const plain = createBattle({ jobId: 'swordsman', weapon: sword, enemyId: 'goblin', seed: 1 })
   check('playerStats省略時は従来通り（防具が乗らない）', plain.player.stats.def === calcJobStats('swordsman').def)
 }

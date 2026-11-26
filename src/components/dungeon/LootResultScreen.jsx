@@ -10,7 +10,7 @@ import EnchantChipList from '../common/EnchantChipList.jsx'
 
 const SLOT_LABELS = { weapon: '武器', armor: '防具', accessory: 'アクセサリー' }
 
-export default function LootResultScreen({ result, jobName, onNext, onLobby, onOpenDictionary }) {
+export default function LootResultScreen({ result, jobName, hp = null, maxHp = null, onNext, onLobby, onOpenDictionary }) {
   const { floor, item, shards, exp, levelBefore, levelAfter } = result
   const rarity = item ? RARITIES[item.rarity] : null
   const leveledUp = levelAfter > levelBefore
@@ -27,6 +27,12 @@ export default function LootResultScreen({ result, jobName, onNext, onLobby, onO
         </div>
         {leveledUp && (
           <div className="loot-levelup">⬆ レベルアップ！ Lv{levelBefore} → Lv{levelAfter}</div>
+        )}
+        {hp != null && maxHp != null && (
+          <div className="loot-gain-row">
+            <span>残りHP（次の階に持ち越し）</span>
+            <span className={`loot-gain-value ${hp / maxHp <= 0.3 ? 'low' : ''}`}>{Math.min(hp, maxHp)}/{maxHp}</span>
+          </div>
         )}
         <div className="loot-gain-row">
           <span>🔷 {PROGRESSION_CONFIG.material.shardName}（ランク{shards.tier}）</span>

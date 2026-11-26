@@ -33,6 +33,9 @@ export default function App() {
   const [jobId, setJobId] = usePersistentState('jobId', 'swordsman', (saved) => (JOBS[saved] ? saved : 'swordsman'))
   // 直近の勝利リザルト（表示用）：{floor, item, shards, exp, levelBefore, levelAfter}
   const [lastResult, setLastResult] = useState(null)
+  // 探索中の残りHP（階をまたいで持ち越す）。null＝満タン（ロビーから出発した直後）
+  // ロビーに戻ると全回復する。MPは今まで通り戦闘ごとに全回復
+  const [runHp, setRunHp] = useState(null)
   const [showDictionary, setShowDictionary] = useState(false)
   const dungeon = useDungeonState()
   const inventory = useInventoryState()
@@ -40,6 +43,8 @@ export default function App() {
   const progress = useProgressState()
   const itemsById = useMemo(() => Object.fromEntries(inventory.items.map((it) => [it.id, it])), [inventory.items])
   const jobLevel = progress.jobLevels[jobId]?.level || 1
+  // 今の最大HP（職業レベル・装備込み）。探索中の残りHP表示に使う
+  const currentMaxHp = buildPlayerStats({ jobId, level: jobLevel, slots: equipment.slots, itemsById }).hp
 
   // 新規プレイ（インベントリが空の状態でアプリを開いた）なら初期装備一式を配る
   // セーブがあればインベントリは空ではないので、ここは本当の初回だけ通る
@@ -57,6 +62,7 @@ export default function App() {
 
   // ロビーから出発（武器は装備スロットのものをSetupScreen経由で受け取る）
   const depart = ({ startFloor }) => {
+    setRunHp(null) // ロビーから出発する時は満タン
     dungeon.enterDungeon(startFloor)
     setScreen('dungeon')
   }
@@ -68,7 +74,7 @@ export default function App() {
     // （探索中にレベルが上がれば、次の戦闘からすぐ反映される）
     const weapon = itemsById[equipment.slots.weapon]
     const playerStats = buildPlayerStats({ jobId, level: jobLevel, slots: equipment.slots, itemsById })
-    setBattle(createBattle({ jobId, weapon, enemyDef, playerStats }))
+    setBattle(createBattle({ jobId, weapon, enemyDef, playerStats, startHp: runHp }))
     setScreen('battle')
   }
 
@@ -76,6 +82,7 @@ export default function App() {
   const exitBattle = () => {
     const result = battle?.result
     const floor = dungeon.currentFloor
+    const hpLeft = battle?.player.stats.hp ?? null
     setBattle(null)
     if (result === 'win' && floor != null) {
       const boss = isBossFloor(floor)
@@ -88,6 +95,8 @@ export default function App() {
       const { before, after } = progress.gainExp(jobId, exp)
       // ボス撃破で次ブロックの先頭階（次のチェックポイント）を解放
       if (boss) dungeon.unlockCheckpoint(floor + 1)
+      // 残りHPを次の階へ持ち越す（レベルアップしても回復はしない。最大HPが増えた分だけ余裕ができる）
+      setRunHp(hpLeft)
       setLastResult({ floor, item, shards, exp, levelBefore: before.level, levelAfter: after.level })
       setScreen('loot')
     } else {
@@ -156,7 +165,13 @@ export default function App() {
           />
         )}
         {screen === 'dungeon' && (
-          <DungeonScreen floor={dungeon.currentFloor} onAdvance={advance} onReturnLobby={toLobby} />
+          <DungeonScreen
+            floor={dungeon.currentFloor}
+            hp={runHp ?? currentMaxHp}
+            maxHp={currentMaxHp}
+            onAdvance={advance}
+            onReturnLobby={toLobby}
+          />
         )}
         {screen === 'battle' && battle && (
           <BattleScreen
@@ -169,6 +184,8 @@ export default function App() {
         {screen === 'loot' && lastResult && (
           <LootResultScreen
             result={lastResult}
+            hp={runHp ?? currentMaxHp}
+            maxHp={currentMaxHp}
             jobName={JOBS[jobId].name}
             onNext={nextFloor}
             onLobby={toLobby}

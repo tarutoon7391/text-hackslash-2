@@ -5,7 +5,8 @@ import { ELEMENT_COLORS } from '../../data/colorPalette.js'
 import { floorToZoneElement, isBossFloor, floorInBlock } from '../../systems/dungeonState.js'
 import { DUNGEON_CONFIG } from '../../data/dungeonConfig.js'
 
-export default function DungeonScreen({ floor, onAdvance, onReturnLobby }) {
+// hp／maxHp：探索中の残りHP（階をまたいで持ち越される。ロビーに戻ると全回復）
+export default function DungeonScreen({ floor, hp = null, maxHp = null, onAdvance, onReturnLobby }) {
   const zone = floorToZoneElement(floor)
   const boss = isBossFloor(floor)
   const elem = ELEMENTS[zone]
@@ -24,6 +25,19 @@ export default function DungeonScreen({ floor, onAdvance, onReturnLobby }) {
           {boss && <span className="dungeon-boss-label">⚠️ ボス階</span>}
         </div>
       </div>
+
+      {hp != null && maxHp != null && (
+        <div className="run-hp">
+          <div className="bar-label">
+            <span>HP（持ち越し）</span>
+            <span>{Math.min(hp, maxHp)}/{maxHp}</span>
+          </div>
+          <div className="bar-bg">
+            <div className="bar-fill" style={{ width: `${Math.min(100, (hp / maxHp) * 100)}%`, background: hp / maxHp <= 0.3 ? '#e05555' : '#4caf7d' }} />
+          </div>
+          <div className="run-hp-note">HPは次の階に持ち越される。ロビーに戻ると全回復</div>
+        </div>
+      )}
 
       <div className="dungeon-hint">
         {boss

@@ -92,7 +92,8 @@ function getPlusPowerMult(plus) {
 // playerStats：装備・レベル込みの実ステータス（playerStats.jsのbuildPlayerStatsの戻り値）。
 //   渡すとそれをそのまま使う（防具・アクセ・エンチャント・+値・職業レベルが戦闘に反映される）。
 //   省略時は従来通り「職業Lv1の基礎値＋武器ATK×武器種補正」だけで作る（スモークテスト用）
-export function createBattle({ jobId, weapon, enemyId, enemyDef = null, seed = null, playerStats: givenStats = null }) {
+// startHp：戦闘開始時のHP（探索中の持ち越し用）。省略時は最大HPで始まる
+export function createBattle({ jobId, weapon, enemyId, enemyDef = null, seed = null, playerStats: givenStats = null, startHp = null }) {
   const rng = seed != null ? createSeededRng(seed) : Math.random
   const job = JOBS[jobId]
   const jobStats = calcJobStats(jobId)
@@ -116,6 +117,9 @@ export function createBattle({ jobId, weapon, enemyId, enemyDef = null, seed = n
         spd: Math.round(jobStats.spd * typeMods.spd),
         crit: Math.round(jobStats.crit * typeMods.crit),
       }
+
+  // HPの持ち越し：前の戦闘の残りHPから始める（最低1、最大HPは超えない）
+  if (startHp != null) playerStats.hp = Math.max(1, Math.min(playerStats.maxHp, Math.round(startHp)))
 
   const def = enemyDef || ENEMIES[enemyId]
   const enemyStats = {
