@@ -197,7 +197,8 @@ function addLog(battle, text, kind = 'info') {
 
 // UI演出用イベントの通知（数値計算には一切影響しない）
 // type: 'ailmentApplied'（付与・悪化）| 'ailmentTriggered'（不利益の発動）
-//       'damage'（攻撃が命中。amount=ダメージ量, crit=会心か）| 'miss'（攻撃が外れた）
+//       'damage'（攻撃が命中。amount=ダメージ量, crit=会心か, element=攻撃の属性（無属性はnull）,
+//                 elemMult=属性相性の倍率：1より大きい=弱点／1より小さい=耐性）| 'miss'（攻撃が外れた）
 function pushEvent(battle, event) {
   if (battle.uiEvents) battle.uiEvents.push(event)
 }
@@ -507,7 +508,8 @@ function executeNormalAttack(battle, attacker, defender) {
   applyDamage(battle, defender, dmg)
   defender.lastHitTurn = battle.turn
   addLog(battle, `　${isCrit ? '💥会心！ ' : ''}${defender.name} に ${dmg} ダメージ`, isCrit ? 'crit' : 'damage')
-  pushEvent(battle, { type: 'damage', target: defender.id, amount: dmg, crit: isCrit })
+  // 通常攻撃は無属性（相性計算なし）
+  pushEvent(battle, { type: 'damage', target: defender.id, amount: dmg, crit: isCrit, element: null, elemMult: 1 })
 
   // 凍結は被弾で解除
   if (frozen) {
@@ -630,7 +632,7 @@ function executeAttack(battle, attacker, defender, skill, skillRef, manualTarget
     const critText = isCrit ? '💥会心！ ' : ''
     const elemText = elemMult > 1 ? '⚔️弱点！ ' : elemMult < 1 ? '🛡️耐性… ' : ''
     addLog(battle, `　${critText}${elemText}${defender.name} に ${dmg} ダメージ`, isCrit ? 'crit' : 'damage')
-    pushEvent(battle, { type: 'damage', target: defender.id, amount: dmg, crit: isCrit })
+    pushEvent(battle, { type: 'damage', target: defender.id, amount: dmg, crit: isCrit, element: attackElement || null, elemMult })
 
     // 凍結は被弾で解除
     if (frozen) {

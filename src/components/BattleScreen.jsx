@@ -18,6 +18,7 @@ import StatusEffectShake from './battle/StatusEffectShake.jsx'
 import StatusEffectPopup from './battle/StatusEffectPopup.jsx'
 import GlossarySummaryPopup from './common/GlossarySummaryPopup.jsx'
 import { STATUS_EFFECT_COLORS } from '../data/statusEffectColors.js'
+import { ELEMENT_COLORS } from '../data/colorPalette.js'
 import { GLOSSARY_BY_TERM } from '../data/glossary.js'
 import { renderGlossaryText } from '../utils/glossaryText.js'
 
@@ -143,7 +144,15 @@ export default function BattleScreen({ battle, setBattle, onExit, onOpenDictiona
         .filter((ev) => ev.target === 'enemy' && (ev.type === 'damage' || ev.type === 'miss'))
         .map((ev) => (ev.type === 'miss'
           ? { text: 'miss', kind: 'miss' }
-          : { text: String(ev.amount), kind: ev.crit ? 'crit' : 'damage' }))
+          : {
+              text: String(ev.amount),
+              kind: 'damage',
+              crit: ev.crit,
+              // 数字の色＝攻撃した属性の色（無属性は白）
+              color: ev.element ? ELEMENT_COLORS[ev.element] : null,
+              // 弱点＝大きく太く／耐性＝小さく
+              eff: ev.elemMult > 1 ? 'weak' : ev.elemMult < 1 ? 'resist' : null,
+            }))
       // 攻撃以外で減ったHP（火傷などの継続ダメージ・混乱の自傷）も数字で出す
       const attackTotal = uiEvents
         .filter((ev) => ev.target === 'enemy' && ev.type === 'damage')
@@ -321,8 +330,12 @@ export default function BattleScreen({ battle, setBattle, onExit, onOpenDictiona
               {enemyPops.map((pop) => (
                 <span
                   key={pop.id}
-                  className={`dmg-pop dmg-${pop.kind}`}
-                  style={{ animationDelay: `${pop.order * 120}ms`, '--pop-x': `${[0, -38, 38][pop.order % 3]}px` }}
+                  className={`dmg-pop dmg-${pop.kind} ${pop.crit ? 'is-crit' : ''} ${pop.eff ? `eff-${pop.eff}` : ''}`}
+                  style={{
+                    animationDelay: `${pop.order * 120}ms`,
+                    '--pop-x': `${[0, -38, 38][pop.order % 3]}px`,
+                    ...(pop.color ? { color: pop.color } : {}),
+                  }}
                 >
                   {pop.text}
                 </span>

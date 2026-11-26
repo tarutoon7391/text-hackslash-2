@@ -1141,7 +1141,6 @@ body::after {
   text-shadow: 2px 2px 0 #000, -2px 2px 0 #000, 2px -2px 0 #000, -2px -2px 0 #000;
 }
 .dmg-pop.dmg-damage { color: #ffffff; }
-.dmg-pop.dmg-crit { color: var(--special); font-size: 38px; }
 .dmg-pop.dmg-miss { color: #8a8f99; font-size: 22px; letter-spacing: 2px; }
 @keyframes dmgPop {
   0%   { opacity: 0; transform: translate(calc(-50% + var(--pop-x, 0px)), 0) scale(0.6); }
@@ -1284,3 +1283,33 @@ body::after {
 .run-hp { border: 1px solid var(--line); background: var(--panel); padding: 8px 10px; }
 .run-hp-note { font-size: 10px; color: var(--muted); margin-top: 4px; }
 .loot-gain-value.low { color: var(--danger); }
+
+/* ===== ダメージ数字：属性の色・弱点/耐性の大きさ・会心の金色発光 =====
+   色は攻撃した属性の色（JS側でstyleのcolorに入れる。無属性は白のまま）
+   大きさ：ふつう30px／弱点は大きく太く／耐性は小さく（太さはそのまま） */
+.dmg-pop.eff-weak {
+  font-size: 46px;
+  /* 等幅フォントには700より太い字が無いので、同じ色のふち取りで太らせる */
+  -webkit-text-stroke: 2px currentColor;
+  paint-order: stroke fill;
+}
+.dmg-pop.eff-resist { font-size: 19px; }
+
+/* 会心：数字の色（属性色）はそのままに、金色のふちと金色の光をまとわせる。
+   雷属性（黄色い数字）と見分けがつくよう、色ではなく「光り方」で会心を表す */
+.dmg-pop.is-crit {
+  font-size: 36px;
+  text-shadow:
+    1px 1px 0 #7a4b00, -1px 1px 0 #7a4b00, 1px -1px 0 #7a4b00, -1px -1px 0 #7a4b00,
+    0 0 6px #ffd700, 0 0 12px #ffb300, 0 0 22px #ff8c00;
+}
+.dmg-pop.is-crit.eff-weak { font-size: 50px; }
+.dmg-pop.is-crit.eff-resist { font-size: 24px; }
+/* きらっと明滅（浮き上がる動きはそのまま、光だけ追加で動かす） */
+.dmg-pop.is-crit {
+  animation: dmgPop 0.9s ease-out both, critGlow 0.3s ease-in-out 3;
+}
+@keyframes critGlow {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(1.6) drop-shadow(0 0 6px #ffd700); }
+}
