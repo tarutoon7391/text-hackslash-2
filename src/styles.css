@@ -4,15 +4,18 @@
    - セーフエリア対応 */
 
 :root {
-  --bg: #14161f;
-  --panel: #1e2230;
-  --panel2: #262b3d;
-  --text: #e8eaf2;
-  --muted: #9aa0b5;
-  --accent: #ffb84a;
-  --danger: #e05555;
-  --line: #343a52;
-  --acting: #4aff8a; /* 行動中ハイライト（緑蛍光） */
+  /* 初代text-hackslash準拠のターミナル風サイバー配色（黒地＋蛍光グリーン） */
+  --bg: #0a0a0a;
+  --panel: #050505;
+  --panel2: #0c1a10;
+  --text: #00ff41;
+  --muted: #00b32d;
+  --accent: #00ccff;   /* 見出し・選択中（シアン） */
+  --danger: #ff4444;
+  --line: #0c6b26;     /* 通常時の枠線（暗い緑） */
+  --acting: #ffdd00;   /* 行動中ハイライト（黄蛍光。全体が緑なので区別のため黄） */
+  --glow: #00ff41;
+  --special: #ffdd00;
 }
 
 /* 属性カラー（スキルの色分けに使用） */
@@ -29,7 +32,7 @@
 html, body {
   background: var(--bg);
   color: var(--text);
-  font-family: 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', system-ui, sans-serif;
+  font-family: 'Courier New', Courier, 'Osaka-Mono', 'MS Gothic', monospace;
   -webkit-tap-highlight-color: transparent;
 }
 
@@ -903,3 +906,131 @@ button:disabled { opacity: 0.4; cursor: default; }
 
 /* エラートースト（通常トーストの赤枠版） */
 .toast.toast-error { border-color: var(--danger); color: #ffb0a0; }
+
+
+/* =====================================================================
+   サイバー／ターミナル風テーマ（初代text-hackslashの見た目に寄せる上書き層）
+   - 角丸なし・1px蛍光枠・発光（glow）・走査線
+   - レイアウト（サイズ・余白・配置）には触れない。色と装飾のみ
+   ===================================================================== */
+
+/* 角丸を全廃（HPバー等も含めて直線的に） */
+*, *::before, *::after { border-radius: 0 !important; }
+
+/* 画面全体にうっすら走査線。操作は透過 */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 100;
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0) 0,
+    rgba(0, 0, 0, 0) 2px,
+    rgba(0, 0, 0, 0.18) 3px
+  );
+}
+
+/* タイトル・見出しは字間を空けて発光 */
+.setup-title {
+  letter-spacing: 4px;
+  text-shadow: 0 0 10px var(--glow);
+}
+.section-label,
+.gloss-title,
+.modal-sheet h3,
+.equip-slot-label,
+.loot-drop-label {
+  letter-spacing: 2px;
+  text-shadow: 0 0 6px var(--accent);
+}
+.section-label::before { content: '> '; }
+
+/* パネル・カード類：黒地に1pxの緑枠＋淡い発光 */
+.panel,
+.stat-row,
+.job-card, .enemy-card,
+.lobby-equip-slot, .equip-slot,
+.weapon-card, .loot-card,
+.cp-btn, .equip-tab,
+.dungeon-zone {
+  background: var(--panel);
+  border-width: 1px;
+  border-style: solid;
+}
+.panel, .stat-row { border-color: var(--text); box-shadow: 0 0 8px #00ff4166; }
+
+/* 選択中：シアン枠＋発光 */
+.job-card.selected, .enemy-card.selected,
+.cp-btn.selected, .equip-tab.selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 10px #00ccff88, inset 0 0 10px #00ccff22;
+}
+.lobby-equip-slot.filled, .equip-slot.filled {
+  border-color: var(--text);
+  box-shadow: 0 0 6px #00ff4144;
+}
+
+/* 行動中（黄）／対象選択（白）の発光 */
+.panel.acting {
+  border-color: var(--acting);
+  box-shadow: 0 0 12px rgba(255, 221, 0, 0.55), inset 0 0 10px rgba(255, 221, 0, 0.12);
+}
+
+/* ログ欄：内側発光。会心は黄色く光らせる */
+.log-line.log-crit { color: var(--special); text-shadow: 0 0 4px var(--special); }
+.log-line.log-damage { color: #ff6666; }
+.log-line.log-system { color: var(--accent); }
+
+/* HP/MPバー：黒地＋緑枠 */
+.bar-bg { background: #111; border: 1px solid var(--line); }
+
+/* ボタン：塗りつぶしをやめて枠線＋発光（初代のaction-btn / next-btn準拠） */
+.start-btn, .use-btn {
+  background: var(--bg);
+  color: var(--special);
+  border: 1px solid var(--special);
+  letter-spacing: 2px;
+  transition: background-color 0.15s, box-shadow 0.15s;
+}
+.start-btn:hover:not(:disabled), .use-btn:hover:not(:disabled),
+.start-btn:active:not(:disabled), .use-btn:active:not(:disabled) {
+  background: #ffdd0022;
+  box-shadow: 0 0 10px var(--special);
+}
+.use-btn.danger {
+  background: var(--bg);
+  color: var(--danger);
+  border-color: var(--danger);
+}
+.use-btn.danger:hover:not(:disabled), .use-btn.danger:active:not(:disabled) {
+  background: #ff444422;
+  box-shadow: 0 0 10px var(--danger);
+}
+
+/* チップ類：黒地に細枠 */
+.skill-chip, .elem-chip, .effect-chip { border-top: 1px solid var(--line); border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.skill-chip.selected, .skill-btn.selected, .skill-chip.frame-empty.selected { outline-color: var(--accent); }
+
+/* ポップアップ・シート：緑枠＋強めの発光、背景は濃く */
+.popup-overlay, .gloss-overlay { background: rgba(0, 0, 0, 0.8); }
+.skill-popup, .gloss-popup, .modal-sheet {
+  border-left: 1px solid var(--line);
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  box-shadow: 0 0 24px #00ff4166;
+}
+
+/* 結果バナー */
+.result-banner { border: 1px solid currentColor; letter-spacing: 4px; }
+.result-banner.win { background: var(--bg); color: var(--text); text-shadow: 0 0 10px var(--glow); box-shadow: 0 0 12px #00ff4166; }
+.result-banner.lose { background: var(--bg); color: var(--danger); text-shadow: 0 0 10px var(--danger); box-shadow: 0 0 12px #ff444466; }
+.extra-banner { background: var(--bg); border: 1px solid var(--special); color: var(--special); text-shadow: 0 0 6px var(--special); }
+
+/* フッターナビ：上辺を緑ラインに、選択中タブを発光 */
+.footer-nav { background: var(--bg); border-top-color: var(--text); box-shadow: 0 -2px 8px #00ff4133; }
+.footer-tab.active { color: var(--text); text-shadow: 0 0 8px var(--glow); }
+
+/* トースト */
+.toast { box-shadow: 0 0 12px #00ff4166; }
