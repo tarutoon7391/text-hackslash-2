@@ -1104,3 +1104,15 @@ body::after {
 .quick-equip-btn:hover, .quick-equip-btn:active { background: #00ff4122; box-shadow: 0 0 8px var(--glow); }
 .quick-equip-btn.equipped { border-color: var(--accent); color: var(--accent); }
 .quick-equip-btn.equipped:hover, .quick-equip-btn.equipped:active { background: #00ccff22; box-shadow: 0 0 8px var(--accent); }
+
+/* 被弾：ドット絵がパパパッと点滅（ドラクエ風。白く光る→消える を素早く繰り返す） */
+.enemy-sprite.hit { animation: spriteHit 0.4s steps(1, end); }
+@keyframes spriteHit {
+  0%   { opacity: 1; filter: brightness(3) saturate(0); }
+  15%  { opacity: 0; }
+  30%  { opacity: 1; filter: none; }
+  45%  { opacity: 0; }
+  60%  { opacity: 1; }
+  75%  { opacity: 0; }
+  90%, 100% { opacity: 1; }
+}

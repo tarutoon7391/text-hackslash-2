@@ -289,7 +289,8 @@ export default function BattleScreen({ battle, setBattle, onExit, onOpenDictiona
               <Bar label="HP" value={e.stats.hp} max={e.stats.maxHp} color="#e05555" />
               <EffectIcons combatant={e} onAilmentTap={onAilmentTap} />
             </div>
-            <div className={`enemy-sprite ${e.stats.hp <= 0 ? 'defeated' : ''} ${enemyDef.isBoss ? 'boss' : ''}`}>
+            {/* 被弾中（shakes.enemy）はドット絵を点滅。倒した時は消滅演出を優先 */}
+            <div className={`enemy-sprite ${e.stats.hp <= 0 ? 'defeated' : shakes.enemy ? 'hit' : ''} ${enemyDef.isBoss ? 'boss' : ''}`}>
               <PixelSprite enemyDef={enemyDef} element={e.element} />
             </div>
           </div>
