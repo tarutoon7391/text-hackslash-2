@@ -179,13 +179,12 @@ export default function BattleScreen({ battle, setBattle, onExit, onOpenDictiona
   }
 
   // ===== スキルフロー =====
+  // スキルは1タップで発動する（以前の「選択→詳細ポップアップ→使う」の3タップは廃止）
+  // 対象が1体だけならそのまま発動、2体以上いる時だけ対象選択に入る（startTargeting側で判定）
+  // 効果の説明はスキルボタン内に常に出ているので、戦闘中は詳細ポップアップを挟まない
   const onSkillTap = (entry) => {
-    if (!entry.usable) return
-    if (selectedSkillId !== entry.skill.id) {
-      setSelectedSkillId(entry.skill.id) // 1回目のタップ：白枠で選択状態
-    } else {
-      setPopupEntry(entry) // 選択状態でもう1回タップ：詳細ポップアップ
-    }
+    if (!entry.usable || busyRef.current) return
+    onUseSkill(entry)
   }
 
   const onUseSkill = (entry) => {
