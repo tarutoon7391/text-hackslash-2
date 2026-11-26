@@ -13,7 +13,7 @@ import { PROGRESSION_CONFIG } from '../../data/progressionConfig.js'
 import {
   addPlusExp, expToNextPlus, shardExp, equipMaterialExp,
   skillSlotCount, enchantSlotCount, buildSkillPool, buildEnchantPool,
-  validateSkillSelection, validateEnchantSelection,
+  validateSkillSelection, validateEnchantSelection, skillInheritBlockReason,
 } from '../../systems/fusionSystem.js'
 import { getItemStats } from '../../systems/playerStats.js'
 
@@ -182,7 +182,10 @@ export default function FusionScreen({ base, candidates, shards, jobLevel, onCon
             {candidates.map((c) => {
               const picked = parentIds.includes(c.id)
               const r = RARITIES[c.rarity]
-              const skillNames = (c.skills || []).map((ref) => ALL_SKILLS_BY_ID[ref.skillId]?.name).filter(Boolean)
+              const skillNames = (c.skills || [])
+                .map((ref) => ALL_SKILLS_BY_ID[ref.skillId])
+                .filter(Boolean)
+                .map((sk) => (skillInheritBlockReason(base, sk.id) ? `${sk.name}（引継不可）` : sk.name))
               const enchantNames = (c.enchants || []).map((en) => `${en.name.replace('%', '')}${en.value}%`)
               return (
                 <button
@@ -218,11 +221,11 @@ export default function FusionScreen({ base, candidates, shards, jobLevel, onCon
                 return (
                   <button
                     key={e.key}
-                    className={`skill-chip keep-chip ${skill.element ? `elem-${skill.element}` : 'elem-none'} ${on ? 'selected' : 'off'}`}
-                    onClick={() => toggleKeep('skill', e)}
+                    className={`skill-chip keep-chip ${skill.element ? `elem-${skill.element}` : 'elem-none'} ${on ? 'selected' : 'off'} ${e.blocked ? 'blocked' : ''}`}
+                    onClick={() => (e.blocked ? setNotice(e.blocked) : toggleKeep('skill', e))}
                   >
-                    {on ? '☑' : '☐'} {'★'.repeat(skill.star)} {skill.name}{e.plus > 0 ? `(+${e.plus})` : ''}
-                    {!e.fromBase && <small> ←親</small>}
+                    {e.blocked ? '🚫' : on ? '☑' : '☐'} {'★'.repeat(skill.star)} {skill.name}{e.plus > 0 ? `(+${e.plus})` : ''}
+                    {!e.fromBase && <small> ←親{e.blocked ? `（${WEAPON_TYPES[skill.weaponType].name}用）` : ''}</small>}
                   </button>
                 )
               })}
@@ -250,7 +253,10 @@ export default function FusionScreen({ base, candidates, shards, jobLevel, onCon
           })}
         </div>
         {notice && <div className="depart-note">{notice}</div>}
-        <div className="equip-hint">チェックを付けたものが合成後に残る。外したものは消える</div>
+        <div className="equip-hint">
+          チェックを付けたものが合成後に残る。外したものは消える
+          {base.slot === 'weapon' && `。スキルは同じ武器種（${WEAPON_TYPES[base.weaponType].name}）用と属性スキルだけ引き継げる`}
+        </div>
 
         {/* 実行（押し間違い防止に2段階） */}
         {!confirming ? (

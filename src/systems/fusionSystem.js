@@ -1,6 +1,7 @@
 // 合成システム（純関数。React非依存＝スモークテスト対象）
 // ベース装備に「欠片」や「他の装備（親）」を合成して+値を上げる。
 // 親にした装備のスキル／エンチャントは、ベースの枠に入る範囲で好きなだけ選んで引き継げる。
+// ただしスキルは武器種ごとの管理：他の武器種用のスキルは引き継げない（属性スキルは武器種を問わない）。
 // 親にした装備と使った欠片は消える。
 //
 // +値の仕組み：
@@ -9,6 +10,8 @@
 import { PROGRESSION_CONFIG } from '../data/progressionConfig.js'
 import { RARITIES } from '../data/rarities.js'
 import { ENCHANT_RULES } from '../data/itemTemplates.js'
+import { ALL_SKILLS_BY_ID } from '../data/skills_elemental.js'
+import { WEAPON_TYPES } from '../data/weaponTypes.js'
 
 // ===== +値と合成経験値 =====
 
@@ -65,6 +68,16 @@ export function enchantSlotCount(item) {
   return Math.max(ENCHANT_RULES.slotsByRarity[item.rarity] ?? 0, (item.enchants || []).length)
 }
 
+// ===== スキルの武器種制限 =====
+// スキルは武器種ごとに管理する：無属性スキル（剣用・弓用…）は同じ武器種の武器にしか引き継げない。
+// 属性スキル（火・水…）は武器種を持たないので、どの武器種にも引き継げる。
+// 引き継げない時は理由の文字列、引き継げる時はnullを返す
+export function skillInheritBlockReason(base, skillId) {
+  const skill = ALL_SKILLS_BY_ID[skillId]
+  if (!skill || !skill.weaponType || skill.weaponType === base.weaponType) return null
+  return `${WEAPON_TYPES[skill.weaponType]?.name || '別の武器種'}用のスキルは${WEAPON_TYPES[base.weaponType]?.name || 'この武器'}に引き継げない`
+}
+
 // ===== 引き継ぎ候補 =====
 // ベースと親が持っているスキル／エンチャントを1つの候補リストにまとめる
 // key＝「どの装備の何番目か」。fromBase＝ベースが元から持っているもの
@@ -73,7 +86,12 @@ export function buildSkillPool(base, parents) {
   const pool = []
   for (const src of [base, ...parents]) {
     ;(src.skills || []).forEach((ref, i) => {
-      pool.push({ key: `${src.id}:s${i}`, fromBase: src.id === base.id, sourceName: src.name, skillId: ref.skillId, plus: ref.plus || 0 })
+      const fromBase = src.id === base.id
+      pool.push({
+        key: `${src.id}:s${i}`, fromBase, sourceName: src.name, skillId: ref.skillId, plus: ref.plus || 0,
+        // 親のスキルが武器種違いで引き継げない場合の理由（ベースが元から持っているものは対象外）
+        blocked: fromBase ? null : skillInheritBlockReason(base, ref.skillId),
+      })
     })
   }
   return pool
@@ -94,6 +112,12 @@ export function buildEnchantPool(base, parents) {
 
 // 選んだスキルの組み合わせが有効か（エラーメッセージ or null）
 export function validateSkillSelection(base, selected) {
+  // 武器種が違うスキルは親から引き継げない（ベースが元から持っているものはそのまま残せる）
+  for (const entry of selected) {
+    if (entry.fromBase) continue
+    const reason = skillInheritBlockReason(base, entry.skillId)
+    if (reason) return reason
+  }
   if (selected.length > skillSlotCount(base)) return `スキルは${skillSlotCount(base)}枠まで`
   const ids = selected.map((s) => s.skillId)
   if (new Set(ids).size !== ids.length) return '同じスキルは1つの武器に1個まで'

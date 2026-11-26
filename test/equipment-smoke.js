@@ -16,8 +16,10 @@ import {
 import { buildPlayerStats, computeStats, getEffectivePlus, getItemStats } from '../src/systems/playerStats.js'
 import {
   fuse, addPlusExp, expToNextPlus, totalInvestedExp, shardExp, equipMaterialExp,
-  buildSkillPool, buildEnchantPool,
+  buildSkillPool, buildEnchantPool, skillInheritBlockReason,
 } from '../src/systems/fusionSystem.js'
+import { SKILLS_NORMAL } from '../src/data/skills_normal.js'
+import { SKILLS_ELEMENTAL } from '../src/data/skills_elemental.js'
 import { applyJobExp, expToNextLevel, enemyExpFor, shardTierForFloor } from '../src/systems/progressState.js'
 import { migrateItems } from '../src/systems/inventoryState.js'
 import { createBattle } from '../src/systems/battleEngine.js'
@@ -362,6 +364,33 @@ console.log('\n【9】合成')
   check('ベース自身は親にできない', Boolean(fuse({ base, parents: [base] }).error))
   check('素材なしは弾く', Boolean(fuse({ base }).error))
   check('引き継ぎ指定なしならベースの現状維持', fuse({ base, parents: [parent] }).item.skills.length === 1)
+
+  // スキルは武器種ごとの管理：他の武器種用は引き継げない（属性スキルは武器種を問わない）
+  {
+    const swordSkills = SKILLS_NORMAL.filter((sk) => sk.weaponType === 'sword')
+    const bowSkill = SKILLS_NORMAL.find((sk) => sk.weaponType === 'bow')
+    const fireSkill = SKILLS_ELEMENTAL.find((sk) => sk.element === 'fire')
+    const swordBase = { id: 'sb', slot: 'weapon', weaponType: 'sword', rarity: 'epic', name: '剣', atk: 20, skills: [{ skillId: swordSkills[0].id, plus: 0 }], enchants: [] }
+    const bowParent = { id: 'bp', slot: 'weapon', weaponType: 'bow', rarity: 'rare', floor: 2, name: '弓', atk: 14,
+      skills: [{ skillId: bowSkill.id, plus: 0 }, { skillId: fireSkill.id, plus: 0 }], enchants: [] }
+    const swordParent = { id: 'sp', slot: 'weapon', weaponType: 'sword', rarity: 'rare', floor: 2, name: '剣2', atk: 14, skills: [{ skillId: swordSkills[1].id, plus: 0 }], enchants: [] }
+
+    check('他の武器種用スキルは引き継ぎ不可と判定される', Boolean(skillInheritBlockReason(swordBase, bowSkill.id)))
+    check('同じ武器種用スキル・属性スキルは引き継げる',
+      skillInheritBlockReason(swordBase, swordSkills[1].id) === null && skillInheritBlockReason(swordBase, fireSkill.id) === null)
+    const pool = buildSkillPool(swordBase, [bowParent])
+    check('候補リストに引き継ぎ不可の印が付く', Boolean(pool[1].blocked) && pool[2].blocked === null && pool[0].blocked === null)
+    check('他の武器種用スキルを選んだ合成は弾く',
+      Boolean(fuse({ base: swordBase, parents: [bowParent], keepSkillKeys: ['sb:s0', 'bp:s0'] }).error))
+    const okElem = fuse({ base: swordBase, parents: [bowParent], keepSkillKeys: ['sb:s0', 'bp:s1'] })
+    check('別の武器種の親からでも属性スキルは引き継げる', !okElem.error && okElem.item.skills[1].skillId === fireSkill.id)
+    const okSame = fuse({ base: swordBase, parents: [swordParent], keepSkillKeys: ['sb:s0', 'sp:s0'] })
+    check('同じ武器種の親からは引き継げる', !okSame.error && okSame.item.skills.length === 2)
+    check('武器種違いの親でも+値の素材にはなる', !fuse({ base: swordBase, parents: [bowParent] }).error)
+    // 制限を入れる前に付いた他武器種スキルは、そのまま残せる（勝手に消えない）
+    const legacy = { ...swordBase, skills: [{ skillId: bowSkill.id, plus: 0 }] }
+    check('ベースが元から持つ他武器種スキルは残せる', !fuse({ base: legacy, shardsUsed: { 1: 1 } }).error)
+  }
 
   // 防具：スキルは持たない
   const armorBase = { id: 'ab', slot: 'armor', rarity: 'epic', def: 8, hp: 20, skills: [], enchants: [] }

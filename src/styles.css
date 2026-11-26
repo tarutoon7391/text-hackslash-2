@@ -1269,3 +1269,5 @@ body::after {
 .keep-chip small { color: var(--special); }
 
 .fusion-confirm { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; }
+.keep-chip.blocked { opacity: 0.35; border-left-color: var(--danger); text-decoration: line-through; }
+.keep-chip.blocked small { color: var(--danger); text-decoration: none; }
