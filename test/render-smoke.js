@@ -15,7 +15,11 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const server = await createServer({ root, server: { middlewareMode: true }, logLevel: 'error' })
 
 // renderToStringはテキスト区切りに<!-- -->を挟むため、文字列判定の前に除去する
-const render = (element) => renderToString(element).replace(/<!--.*?-->/g, '')
+// 絵文字は自作ドット絵アイコン（SVG）に差し替わって出力されるので、判定しやすいよう元の絵文字に戻す
+const render = (element) =>
+  renderToString(element)
+    .replace(/<!--.*?-->/g, '')
+    .replace(/<svg class="pixel-icon"[^>]*data-emoji="([^"]*)"[^>]*>.*?<\/svg>/g, '$1')
 
 let passCount = 0
 let failCount = 0

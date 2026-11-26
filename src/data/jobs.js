@@ -50,7 +50,7 @@ export const JOBS = {
   cleric: {
     id: 'cleric',
     name: '聖職者',
-    icon: '✨',
+    icon: '🙏',
     equipableWeaponTypes: ['staff', 'sword'],
     defaultWeaponType: 'staff',
     tendencies: { hp: 'mid', mp: 'mid', atk: 'low', def: 'mid', spd: 'mid', crit: 'low' },

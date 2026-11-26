@@ -7,7 +7,7 @@ export const ELEMENTS = {
   water:   { id: 'water',   name: '水', icon: '💧', color: '#4ab5ff' },
   thunder: { id: 'thunder', name: '雷', icon: '⚡', color: '#ffd94a' },
   earth:   { id: 'earth',   name: '土', icon: '⛰️', color: '#c98f4a' },
-  light:   { id: 'light',   name: '光', icon: '✨', color: '#fff3b0' },
+  light:   { id: 'light',   name: '光', icon: '☀️', color: '#fff3b0' },
   dark:    { id: 'dark',    name: '闇', icon: '🌑', color: '#a06bff' },
 }
 

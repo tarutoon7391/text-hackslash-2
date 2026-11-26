@@ -12,7 +12,7 @@ export const WEAPON_TYPES = {
   greatsword: {
     id: 'greatsword',
     name: '大剣',
-    icon: '⚔️',
+    icon: '🪓',
     description: '高ATK・低SPD、重い一撃',
     statMods: { atk: 1.25, spd: 0.8, crit: 1.0 },
   },
@@ -40,7 +40,7 @@ export const WEAPON_TYPES = {
   dualblades: {
     id: 'dualblades',
     name: '双剣',
-    icon: '⚡',
+    icon: '🔪',
     description: '多段攻撃・手数',
     statMods: { atk: 0.9, spd: 1.1, crit: 1.1 },
   },
