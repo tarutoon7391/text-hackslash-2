@@ -4,6 +4,7 @@
 const TABS = [
   { key: 'home', icon: '🏰', label: 'ダンジョン' },
   { key: 'equipment', icon: '🎒', label: '装備' },
+  { key: 'monsters', icon: '🤝', label: '仲間' },
   { key: 'dictionary', icon: '📖', label: '辞典' },
 ]
 

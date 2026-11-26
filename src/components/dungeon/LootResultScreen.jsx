@@ -7,17 +7,34 @@ import { WEAPON_TYPES } from '../../data/weaponTypes.js'
 import { PROGRESSION_CONFIG } from '../../data/progressionConfig.js'
 import SkillChipList from '../common/SkillChipList.jsx'
 import EnchantChipList from '../common/EnchantChipList.jsx'
+import PixelSprite from '../battle/PixelSprite.jsx'
 
 const SLOT_LABELS = { weapon: '武器', armor: '防具', accessory: 'アクセサリー' }
 
 export default function LootResultScreen({ result, jobName, hp = null, maxHp = null, onNext, onLobby, onOpenDictionary }) {
-  const { floor, item, shards, exp, levelBefore, levelAfter } = result
+  // recruited：勧誘で仲間にしたモンスター（その場合は敵を倒していないのでドロップ＝item・shardsは無い）
+  const { floor, item, shards, exp, levelBefore, levelAfter, recruited = null } = result
   const rarity = item ? RARITIES[item.rarity] : null
   const leveledUp = levelAfter > levelBefore
 
   return (
     <div className="loot-screen">
-      <div className="loot-banner">🎉 勝利！</div>
+      <div className="loot-banner">{recruited ? '🤝 仲間になった！' : '🎉 勝利！'}</div>
+
+      {recruited && (
+        <div className="monster-card recruited">
+          <div className="monster-sprite">
+            <PixelSprite enemyDef={{ isBoss: recruited.isBoss, sprite: recruited.sprite }} element={recruited.element} size={72} />
+          </div>
+          <div className="monster-info">
+            <div className="monster-name">{recruited.name}</div>
+            <div className="weapon-meta">{getElementDef(recruited.element).icon}{getElementLabel(recruited.element)}</div>
+            <div className="weapon-meta">
+              HP{recruited.stats.hp}／ATK{recruited.stats.atk}／DEF{recruited.stats.def}／SPD{recruited.stats.spd}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 経験値と素材（毎回もらえる） */}
       <div className="loot-gains">
@@ -34,10 +51,12 @@ export default function LootResultScreen({ result, jobName, hp = null, maxHp = n
             <span className={`loot-gain-value ${hp / maxHp <= 0.3 ? 'low' : ''}`}>{Math.min(hp, maxHp)}/{maxHp}</span>
           </div>
         )}
-        <div className="loot-gain-row">
-          <span>🔷 {PROGRESSION_CONFIG.material.shardName}（ランク{shards.tier}）</span>
-          <span className="loot-gain-value">×{shards.count}</span>
-        </div>
+        {shards && (
+          <div className="loot-gain-row">
+            <span>🔷 {PROGRESSION_CONFIG.material.shardName}（ランク{shards.tier}）</span>
+            <span className="loot-gain-value">×{shards.count}</span>
+          </div>
+        )}
       </div>
 
       {/* 装備ドロップ（落ちた時だけ） */}
@@ -63,6 +82,8 @@ export default function LootResultScreen({ result, jobName, hp = null, maxHp = n
             <EnchantChipList enchants={item.enchants} />
           </div>
         </>
+      ) : recruited ? (
+        <div className="equip-hint loot-no-equip">仲間にしたので、ドロップ（欠片・装備）は無い。拠点の「仲間」で確認できる</div>
       ) : (
         <div className="equip-hint loot-no-equip">装備は落ちなかった（ボスは必ず装備を落とす）</div>
       )}

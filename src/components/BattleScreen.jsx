@@ -7,7 +7,7 @@ import { ELEMENTS, getElementDef } from '../data/elements.js'
 import { ENEMIES } from '../data/enemies.js'
 import { STATUS_EFFECTS } from '../data/statusEffects.js'
 import {
-  beginRound, stepBattle, peekNextActor, escapeBattle,
+  beginRound, stepBattle, peekNextActor, escapeBattle, getRecruitChance,
   getActionList, getManualTargetCandidates, statLabel,
 } from '../systems/battleEngine.js'
 import ActionMenu from './battle/ActionMenu.jsx'
@@ -157,6 +157,8 @@ export default function BattleScreen({ battle, setBattle, onExit, onOpenDictiona
       const attackTotal = uiEvents
         .filter((ev) => ev.target === 'enemy' && ev.type === 'damage')
         .reduce((sum, ev) => sum + ev.amount, 0)
+      // 勧誘に失敗した時は敵の上に「…」を出す（成功時は結果バナーが出る）
+      if (uiEvents.some((ev) => ev.type === 'recruit' && !ev.success)) enemyPops.push({ text: '…', kind: 'miss' })
       const otherLoss = before.enemy - battle.enemy.stats.hp - attackTotal
       if (otherLoss > 0) enemyPops.push({ text: String(otherLoss), kind: 'damage' })
       showEnemyPops(enemyPops)
@@ -237,11 +239,8 @@ export default function BattleScreen({ battle, setBattle, onExit, onOpenDictiona
     if (kind === 'attack') {
       runAction({ type: 'normalAttack' })
     } else if (kind === 'recruit') {
-      // 仲間にする（捕獲）はフェーズ3.5相当で実装予定。
-      // 現状は対象選択フローの見た目のみで、捕獲判定ロジックには接続しない
-      setTargeting(null)
-      setToast('モンスター仲間システムは今後のフェーズで実装予定')
-      setTimeout(() => setToast(null), 1800)
+      // 仲間にする（勧誘）：そのターンの行動を使って勧誘する。成功すれば戦闘終了
+      runAction({ type: 'recruit' })
     } else {
       confirmSkillTarget(entry)
     }
@@ -412,6 +411,7 @@ export default function BattleScreen({ battle, setBattle, onExit, onOpenDictiona
           {targeting && <TargetSelector onCancel={() => setTargeting(null)} />}
           <ActionMenu
             disabled={busy || Boolean(targeting)}
+            recruitChance={getRecruitChance(battle)}
             onAttack={() => { resetSelection(); startTargeting('attack') }}
             onSkills={() => { setUiMode(uiMode === 'skillList' ? 'menu' : 'skillList'); setSelectedSkillId(null) }}
             onRecruit={() => { resetSelection(); startTargeting('recruit') }}
@@ -425,13 +425,14 @@ export default function BattleScreen({ battle, setBattle, onExit, onOpenDictiona
         <div className="result-area">
           <div className={`result-banner ${battle.result}`}>
             {battle.result === 'win' && '🎉 勝利！'}
+            {battle.result === 'recruit' && '🤝 仲間になった！'}
             {battle.result === 'lose' && '💀 敗北…'}
             {battle.result === 'escape' && '🏃 逃げ出した'}
             {battle.result === 'draw' && '⏱️ 引き分け'}
           </div>
           {/* 勝利ならドロップ結果へ、それ以外はロビーへ（遷移先の判断はApp側） */}
           <button className="start-btn" onClick={onExit}>
-            {battle.result === 'win' ? 'けっかへ' : 'ロビーに戻る'}
+            {battle.result === 'win' || battle.result === 'recruit' ? 'けっかへ' : 'ロビーに戻る'}
           </button>
         </div>
       )}

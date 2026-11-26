@@ -42,7 +42,7 @@ try {
   const lobbyHtml = render(React.createElement(App))
   check('ロビーが描画できる', lobbyHtml.includes('拠点ロビー'))
   check('フッターナビが表示される',
-    ['ダンジョン', '装備', '辞典'].every((label) => lobbyHtml.includes(label)))
+    ['ダンジョン', '装備', '仲間', '辞典'].every((label) => lobbyHtml.includes(label)))
   check('現在の装備（簡易表示）がある', lobbyHtml.includes('現在の装備'))
   check('テスト用サンプル武器の表示が無い', !lobbyHtml.includes('テスト用サンプル'))
   // SSRの初期状態＝未装備・初回フラグfalseなので「職業タップで自動装備」の案内が出る
@@ -147,6 +147,26 @@ try {
     jobName: '剣士', onNext: () => {}, onLobby: () => {}, onOpenDictionary: () => {},
   }))
   check('リザルト：装備なしでも描画できる', lootNoItem.includes('装備は落ちなかった') && !lootNoItem.includes('レベルアップ'))
+
+  // ============================================================
+  console.log('\n====== 4. 仲間モンスター ======')
+  const { default: MonsterScreen } = await server.ssrLoadModule('/src/pages/MonsterScreen.jsx')
+  const { default: ActionMenu } = await server.ssrLoadModule('/src/components/battle/ActionMenu.jsx')
+  const mon = { id: 'm1', name: '火の魔獣', element: 'fire', floor: 3, isBoss: false, sprite: null, stats: { hp: 73, atk: 8, def: 7, spd: 10 }, recruitedAt: 1 }
+  const monHtml = render(React.createElement(MonsterScreen, { monsters: [mon], onRelease: () => {}, onBack: () => {} }))
+  check('仲間一覧が描画できる', monHtml.includes('仲間モンスター（1）') && monHtml.includes('火の魔獣') && monHtml.includes('3階で仲間に') && monHtml.includes('HP73'))
+  check('仲間ゼロでも描画できる',
+    render(React.createElement(MonsterScreen, { monsters: [], onRelease: () => {}, onBack: () => {} })).includes('まだ仲間がいない'))
+  const menuHtml = render(React.createElement(ActionMenu, { disabled: false, recruitChance: 0.326, onAttack() {}, onSkills() {}, onRecruit() {}, onEscape() {} }))
+  check('仲間にするボタンに成功率が出る', menuHtml.includes('成功率33%'))
+  const bossMenu = render(React.createElement(ActionMenu, { disabled: false, recruitChance: 0, onAttack() {}, onSkills() {}, onRecruit() {}, onEscape() {} }))
+  check('勧誘できない相手ではボタンが押せない', bossMenu.includes('不可'))
+  const recruitedResult = render(React.createElement(LootResultScreen, {
+    result: { floor: 3, item: null, shards: null, recruited: mon, exp: 17, levelBefore: 1, levelAfter: 1 },
+    jobName: '剣士', hp: 50, maxHp: 104, onNext: () => {}, onLobby: () => {}, onOpenDictionary: () => {},
+  }))
+  check('リザルト：仲間にした時の表示',
+    recruitedResult.includes('仲間になった！') && recruitedResult.includes('火の魔獣') && recruitedResult.includes('ドロップ（欠片・装備）は無い') && recruitedResult.includes('50/104'))
 } finally {
   await server.close()
 }

@@ -13,12 +13,14 @@ import DungeonScreen from './components/dungeon/DungeonScreen.jsx'
 import LootResultScreen from './components/dungeon/LootResultScreen.jsx'
 import GlossaryDictionary from './pages/GlossaryDictionary.jsx'
 import EquipmentScreen from './pages/EquipmentScreen.jsx'
+import MonsterScreen from './pages/MonsterScreen.jsx'
 import FooterNav from './components/common/FooterNav.jsx'
 import { createBattle } from './systems/battleEngine.js'
 import { useDungeonState, isBossFloor } from './systems/dungeonState.js'
 import { useInventoryState } from './systems/inventoryState.js'
 import { useEquipmentState } from './systems/equipmentState.js'
 import { useProgressState, enemyExpFor } from './systems/progressState.js'
+import { useMonsterState, createMonsterFromEnemy } from './systems/monsterState.js'
 import { usePersistentState } from './systems/saveStorage.js'
 import { buildPlayerStats } from './systems/playerStats.js'
 import { generateEnemy } from './systems/enemyGenerator.js'
@@ -27,7 +29,7 @@ import { createStarterEquipment } from './data/starterEquipment.js'
 import { JOBS } from './data/jobs.js'
 
 export default function App() {
-  const [screen, setScreen] = useState('lobby') // lobby | equipment | dungeon | battle | loot
+  const [screen, setScreen] = useState('lobby') // lobby | equipment | monsters | dungeon | battle | loot
   const [battle, setBattle] = useState(null)
   // 職業はロビーと装備管理画面で共有する（武器スロットの装備可否チェックに使う）
   const [jobId, setJobId] = usePersistentState('jobId', 'swordsman', (saved) => (JOBS[saved] ? saved : 'swordsman'))
@@ -41,6 +43,7 @@ export default function App() {
   const inventory = useInventoryState()
   const equipment = useEquipmentState()
   const progress = useProgressState()
+  const monsterBox = useMonsterState()
   const itemsById = useMemo(() => Object.fromEntries(inventory.items.map((it) => [it.id, it])), [inventory.items])
   const jobLevel = progress.jobLevels[jobId]?.level || 1
   // 今の最大HP（職業レベル・装備込み）。探索中の残りHP表示に使う
@@ -83,8 +86,18 @@ export default function App() {
     const result = battle?.result
     const floor = dungeon.currentFloor
     const hpLeft = battle?.player.stats.hp ?? null
+    const recruitedEnemy = result === 'recruit' ? battle.enemy : null
     setBattle(null)
-    if (result === 'win' && floor != null) {
+    if (result === 'recruit' && floor != null) {
+      // 勧誘成功：敵は倒していないのでドロップは無し。仲間に加わり、経験値は入る。階は突破扱いで先へ進める
+      const monster = createMonsterFromEnemy(recruitedEnemy)
+      monsterBox.addMonster(monster)
+      const exp = enemyExpFor({ floor, boss: false })
+      const { before, after } = progress.gainExp(jobId, exp)
+      setRunHp(hpLeft)
+      setLastResult({ floor, item: null, shards: null, recruited: monster, exp, levelBefore: before.level, levelAfter: after.level })
+      setScreen('loot')
+    } else if (result === 'win' && floor != null) {
       const boss = isBossFloor(floor)
       // ドロップ：欠片は必ず、装備は雑魚だとたまに・ボスは確定
       const { item, shards } = generateDrops({ floor, grade: boss ? 'boss' : 'grunt' })
@@ -126,14 +139,14 @@ export default function App() {
     }
     setShowDictionary(false)
     if (screen === 'dungeon' || screen === 'loot') dungeon.leaveDungeon()
-    setScreen(tab === 'home' ? 'lobby' : 'equipment')
+    setScreen(tab === 'home' ? 'lobby' : tab === 'monsters' ? 'monsters' : 'equipment')
   }
 
-  // フッターは拠点（ロビー・装備）にいる時だけ表示する
+  // フッターは拠点（ロビー・装備・仲間）にいる時だけ表示する
   // ダンジョンに潜っている間（ダンジョン・戦闘・リザルト）は出さない：
   // 戦闘が終わっても下部が切り替わらず、探索中に装備タブへ飛んで探索が終わってしまう事故も防ぐ
-  const showFooter = screen === 'lobby' || screen === 'equipment'
-  const activeTab = showDictionary ? 'dictionary' : screen === 'equipment' ? 'equipment' : 'home'
+  const showFooter = screen === 'lobby' || screen === 'equipment' || screen === 'monsters'
+  const activeTab = showDictionary ? 'dictionary' : screen === 'equipment' ? 'equipment' : screen === 'monsters' ? 'monsters' : 'home'
 
   return (
     <div className="app-shell">
@@ -162,6 +175,13 @@ export default function App() {
             onUpdateItem={inventory.updateItem}
             onBack={() => setScreen('lobby')}
             onOpenDictionary={() => setShowDictionary(true)}
+          />
+        )}
+        {screen === 'monsters' && (
+          <MonsterScreen
+            monsters={monsterBox.monsters}
+            onRelease={monsterBox.releaseMonster}
+            onBack={() => setScreen('lobby')}
           />
         )}
         {screen === 'dungeon' && (

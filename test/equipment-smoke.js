@@ -22,7 +22,9 @@ import { SKILLS_NORMAL } from '../src/data/skills_normal.js'
 import { SKILLS_ELEMENTAL } from '../src/data/skills_elemental.js'
 import { applyJobExp, expToNextLevel, enemyExpFor, shardTierForFloor } from '../src/systems/progressState.js'
 import { migrateItems } from '../src/systems/inventoryState.js'
-import { createBattle } from '../src/systems/battleEngine.js'
+import { createBattle, beginRound, stepBattle, getRecruitChance } from '../src/systems/battleEngine.js'
+import { generateEnemy } from '../src/systems/enemyGenerator.js'
+import { createMonsterFromEnemy, migrateMonsters } from '../src/systems/monsterState.js'
 import { generateDrops } from '../src/systems/lootSystem.js'
 import { createSeededRng } from '../src/systems/weaponGenerator.js'
 import { PROGRESSION_CONFIG } from '../src/data/progressionConfig.js'
@@ -424,6 +426,66 @@ console.log('\n【9】合成')
   check('旧セーブの装備に+値などの新項目が補われる',
     migrated.length === 1 && migrated[0].plus === 0 && migrated[0].plusExp === 0 && Array.isArray(migrated[0].enchants) && Array.isArray(migrated[0].skills))
   check('セーブが壊れていても落ちない', migrateItems('broken').length === 0)
+}
+
+// ============================================================
+// 10. 仲間にする（戦闘中の勧誘）
+// ============================================================
+console.log('\n【10】仲間にする')
+{
+  const weapon = { id: 'w', slot: 'weapon', weaponType: 'sword', element: null, atk: 10, skills: [], enchants: [] }
+  const cfg = PROGRESSION_CONFIG.recruit
+  const mk = (floor, seed) => createBattle({ jobId: 'swordsman', weapon, enemyDef: generateEnemy({ floor }), seed })
+  const runRound = (b, action) => { beginRound(b, action); let g = 0; while (b.phase === 'acting' && g++ < 50) stepBattle(b) }
+
+  const fresh = mk(1, 1)
+  check('敵が無傷なら成功率は最低値', Math.abs(getRecruitChance(fresh) - cfg.baseChance) < 1e-9)
+  fresh.enemy.stats.hp = Math.round(fresh.enemy.stats.maxHp / 2)
+  const half = getRecruitChance(fresh)
+  check('敵のHPを減らすほど成功率が上がる', half > cfg.baseChance && half < cfg.maxChance)
+  fresh.enemy.stats.hp = 1
+  check('瀕死ならほぼ最大値', getRecruitChance(fresh) > half && getRecruitChance(fresh) <= cfg.maxChance)
+  check('ボスは勧誘できない', getRecruitChance(mk(5, 1)) === cfg.bossChance)
+
+  // 成功するまでシードを変えて試す（瀕死にしてから勧誘）
+  let success = null, failed = null
+  for (let seed = 1; seed <= 200 && !(success && failed); seed++) {
+    const b = mk(2, seed)
+    b.enemy.stats.hp = 1
+    runRound(b, { type: 'recruit' })
+    if (b.result === 'recruit' && !success) success = b
+    if (b.result !== 'recruit' && !failed) failed = b
+  }
+  check('勧誘に成功すると戦闘が終わる（result=recruit）', Boolean(success) && success.phase === 'ended')
+  check('成功時は敵を倒していない（HPが残っている）', success.enemy.stats.hp > 0)
+  check('成功ログが出る', success.log.some((l) => l.text.includes('仲間になった')))
+  check('失敗しても戦闘は続く（そのターンを使っただけ）',
+    Boolean(failed) && failed.log.some((l) => l.text.includes('そっぽを向いた')) && failed.result !== 'recruit')
+  check('失敗したターンも敵は行動する', failed.log.some((l) => l.text.includes(failed.enemy.name + ' の')))
+
+  const boss = mk(5, 3)
+  runRound(boss, { type: 'recruit' })
+  check('ボスへの勧誘は必ず失敗する', boss.result !== 'recruit' && boss.log.some((l) => l.text.includes('聞く耳を持たない')))
+
+  // 確率どおりに成功するか（瀕死の雑魚を1000回勧誘）
+  let wins = 0
+  for (let seed = 1; seed <= 1000; seed++) {
+    const b = mk(1, seed * 13)
+    b.enemy.stats.hp = 1
+    const expected = getRecruitChance(b)
+    runRound(b, { type: 'recruit' })
+    if (b.result === 'recruit') wins++
+    if (seed === 1000) check('成功率が設定どおり（瀕死で約6割）', Math.abs(wins / 1000 - expected) < 0.05, `(実際: ${(wins / 10).toFixed(1)}% 期待: ${(expected * 100).toFixed(1)}%)`)
+  }
+
+  // 仲間データ
+  const mon = createMonsterFromEnemy(success.enemy, { now: 1000, rand: () => 0.5 })
+  check('仲間データに名前・属性・階・本来のステータスが入る',
+    mon.name === success.enemy.name && mon.element === success.enemy.element && mon.floor === 2 &&
+    mon.stats.hp === success.enemy.stats.maxHp && mon.isBoss === false && typeof mon.id === 'string')
+  const migrated = migrateMonsters([{ id: 'm1', name: '古い仲間' }, null, { name: 'IDなし' }])
+  check('旧セーブの仲間データも読める（不足項目を補完）',
+    migrated.length === 1 && migrated[0].stats.hp === 0 && migrated[0].element === null && migrated[0].isBoss === false)
 }
 
 // ============================================================

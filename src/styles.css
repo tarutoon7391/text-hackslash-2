@@ -1313,3 +1313,23 @@ body::after {
   0%, 100% { filter: brightness(1); }
   50% { filter: brightness(1.6) drop-shadow(0 0 6px #ffd700); }
 }
+
+/* ===== 仲間にする ===== */
+.cmd-sub { display: block; font-size: 9px; font-weight: normal; color: var(--muted); }
+.result-banner.recruit { background: var(--bg); color: #ff66cc; text-shadow: 0 0 10px #ff66cc; box-shadow: 0 0 12px #ff66cc66; }
+.monster-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+}
+.monster-card.recruited { box-shadow: 0 0 10px #ff66cc66; border-color: #ff66cc; }
+.monster-sprite { line-height: 0; flex-shrink: 0; }
+.monster-info { flex: 1; min-width: 0; }
+.monster-name { font-size: 14px; font-weight: bold; }
+.monster-release { display: flex; flex-direction: column; gap: 4px; }
+.monster-release-btn, .monster-release .quick-equip-btn { flex: 0 0 auto; padding: 0 10px; font-size: 11px; }
+.monster-release-btn { border-color: var(--line); color: var(--muted); }
+.quick-equip-btn.release-yes { border-color: var(--danger); color: var(--danger); }

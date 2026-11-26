@@ -29,6 +29,15 @@ export const PROGRESSION_CONFIG = {
     expPow: 1.6,
   },
 
+  // ===== 仲間にする（戦闘中の勧誘） =====
+  // 成功率 = baseChance + (maxChance - baseChance) × (敵の減ったHPの割合)
+  // 敵のHPを減らすほど成功しやすい。ボスは勧誘できない（bossChance）
+  recruit: {
+    baseChance: 0.05,
+    maxChance: 0.6,
+    bossChance: 0,
+  },
+
   // ===== 合成素材 =====
   material: {
     // 欠片：5階ブロックごとにランクが上がる。1個あたりの合成経験値 = shardExpBase × ランク

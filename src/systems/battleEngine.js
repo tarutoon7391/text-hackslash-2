@@ -18,6 +18,7 @@ import { WEAPON_TYPES } from '../data/weaponTypes.js'
 import { ENEMIES } from '../data/enemies.js'
 import { ALL_SKILLS_BY_ID } from '../data/skills_elemental.js'
 import { createSeededRng } from './weaponGenerator.js'
+import { PROGRESSION_CONFIG } from '../data/progressionConfig.js'
 
 // ============================================================
 // ユーティリティ
@@ -199,6 +200,7 @@ function addLog(battle, text, kind = 'info') {
 // type: 'ailmentApplied'（付与・悪化）| 'ailmentTriggered'（不利益の発動）
 //       'damage'（攻撃が命中。amount=ダメージ量, crit=会心か, element=攻撃の属性（無属性はnull）,
 //                 elemMult=属性相性の倍率：1より大きい=弱点／1より小さい=耐性）| 'miss'（攻撃が外れた）
+//       'recruit'（勧誘した。success=成功したか）
 function pushEvent(battle, event) {
   if (battle.uiEvents) battle.uiEvents.push(event)
 }
@@ -431,6 +433,11 @@ function performAction(battle, actor, action) {
   }
 
   // --- 行動本体 ---
+  if (action.type === 'recruit') {
+    executeRecruit(battle, actor)
+    actor.actedThisTurn = true
+    return
+  }
   if (action.type === 'normalAttack' || action.type === 'basic') {
     // 通常攻撃（'basic'は旧名の別名として残す）
     executeNormalAttack(battle, actor, target)
@@ -666,6 +673,41 @@ function executeAttack(battle, attacker, defender, skill, skillRef, manualTarget
 
 function applyDamage(battle, combatant, dmg) {
   combatant.stats.hp = Math.max(0, combatant.stats.hp - dmg)
+}
+
+// ============================================================
+// 仲間にする（戦闘中の勧誘）
+// 敵のHPを減らすほど成功しやすい。成功したら戦闘終了（result='recruit'）。
+// 失敗したらそのターンの行動を使っただけで戦闘は続く。ボスは勧誘できない
+// ============================================================
+
+// 今この瞬間の勧誘成功率（0〜1）。UIのボタン表示にも使う
+export function getRecruitChance(battle) {
+  const { baseChance, maxChance, bossChance } = PROGRESSION_CONFIG.recruit
+  const enemy = battle.enemy
+  if (enemy.enemyDef?.isBoss) return bossChance
+  const lost = 1 - Math.max(0, enemy.stats.hp) / enemy.stats.maxHp
+  return clamp(baseChance + (maxChance - baseChance) * lost, 0, 1)
+}
+
+function executeRecruit(battle, actor) {
+  const enemy = battle.enemy
+  addLog(battle, `${actor.name} は ${enemy.name} を仲間に誘った！`, 'action')
+  const chance = getRecruitChance(battle)
+  if (chance <= 0) {
+    addLog(battle, `　${enemy.name} は聞く耳を持たない…`, 'miss')
+    pushEvent(battle, { type: 'recruit', success: false })
+    return
+  }
+  if (battle.rng() < chance) {
+    battle.result = 'recruit'
+    battle.phase = 'ended'
+    addLog(battle, `🤝 ${enemy.name} が仲間になった！`, 'system')
+    pushEvent(battle, { type: 'recruit', success: true })
+  } else {
+    addLog(battle, `　${enemy.name} はそっぽを向いた…`, 'miss')
+    pushEvent(battle, { type: 'recruit', success: false })
+  }
 }
 
 function checkBattleEnd(battle) {
