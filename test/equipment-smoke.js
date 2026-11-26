@@ -25,6 +25,9 @@ import { migrateItems } from '../src/systems/inventoryState.js'
 import { createBattle, beginRound, stepBattle, getRecruitChance } from '../src/systems/battleEngine.js'
 import { generateEnemy } from '../src/systems/enemyGenerator.js'
 import { createMonsterFromEnemy, migrateMonsters } from '../src/systems/monsterState.js'
+import { ENEMY_SPECIES_BY_BLOCK, SPECIES_SPRITES, getSpeciesForFloor } from '../src/data/enemySpecies.js'
+import { ENEMY_SPRITES, resolveSpriteKey } from '../src/data/enemySprites.js'
+import { DUNGEON_CONFIG } from '../src/data/dungeonConfig.js'
 import { generateDrops } from '../src/systems/lootSystem.js'
 import { createSeededRng } from '../src/systems/weaponGenerator.js'
 import { PROGRESSION_CONFIG } from '../src/data/progressionConfig.js'
@@ -486,6 +489,33 @@ console.log('\n【10】仲間にする')
   const migrated = migrateMonsters([{ id: 'm1', name: '古い仲間' }, null, { name: 'IDなし' }])
   check('旧セーブの仲間データも読める（不足項目を補完）',
     migrated.length === 1 && migrated[0].stats.hp === 0 && migrated[0].element === null && migrated[0].isBoss === false)
+}
+
+// ============================================================
+// 11. 敵の種族（1〜25階）
+// ============================================================
+console.log('\n【11】敵の種族')
+{
+  const names = (from) => [0, 1, 2, 3, 4].map((i) => generateEnemy({ floor: from + i }).name)
+  let patternOk = true
+  for (let blk = 0; blk < 5; blk++) {
+    const n = names(blk * 5 + 1)
+    // 1・2階目は同じ敵、3・4・5階目はそれぞれ別の敵（ブロック内で4種類）
+    if (!(n[0] === n[1] && new Set(n).size === 4)) patternOk = false
+  }
+  check('各ブロック：1・2階目が同じ敵、3〜5階目は別々（計4種類）', patternOk)
+  const all = []
+  for (let f = 1; f <= 25; f++) all.push(generateEnemy({ floor: f }))
+  check('25階までで20種類の敵が出る', new Set(all.map((e) => e.name)).size === 20)
+  check('5階ごとの最後はボス', all.filter((e) => e.isBoss).map((e) => e.floor).join(',') === '5,10,15,20,25')
+  check('種族の属性がゾーンの属性と一致',
+    ENEMY_SPECIES_BY_BLOCK.every((b, i) => b.zone === DUNGEON_CONFIG.zoneRotation[i]) && all.every((e, i) => e.element === ENEMY_SPECIES_BY_BLOCK[Math.floor(i / 5)].zone))
+  check('全種族に16x16の見た目がある',
+    all.every((e) => { const rows = ENEMY_SPRITES[resolveSpriteKey(e)]; return rows === SPECIES_SPRITES[e.speciesId] && rows.length === 16 && rows.every((r) => r.length === 16) }))
+  const beyond = generateEnemy({ floor: 26 })
+  check('26階以降は汎用の敵にフォールバックする',
+    getSpeciesForFloor(26) === null && beyond.speciesId === null && beyond.name.includes('魔獣') && resolveSpriteKey(beyond) === 'beast')
+  check('種族が付いてもステータスは階層で決まる（1階と2階で伸びる）', all[1].stats.hp > all[0].stats.hp)
 }
 
 // ============================================================

@@ -4,6 +4,7 @@
 import { DUNGEON_CONFIG } from '../data/dungeonConfig.js'
 import { ELEMENTS } from '../data/elements.js'
 import { floorToZoneElement, isBossFloor } from './dungeonState.js'
+import { getSpeciesForFloor } from '../data/enemySpecies.js'
 
 let enemySeq = 1
 
@@ -12,6 +13,7 @@ export function generateEnemy({ floor, rng = Math.random }) {
   const boss = isBossFloor(floor)
   const cfg = boss ? DUNGEON_CONFIG.enemy.boss : DUNGEON_CONFIG.enemy.grunt
   const elemDef = ELEMENTS[zone]
+  const species = getSpeciesForFloor(floor, DUNGEON_CONFIG.blockSize)
 
   // TODO: 階層倍率は仮式「ベース×(1 + 階層×0.05)」。正確な対応表は実装後調整
   const mult = 1 + floor * cfg.growthPerFloor
@@ -23,7 +25,10 @@ export function generateEnemy({ floor, rng = Math.random }) {
   // 敵の属性はゾーンのテーマ属性に合わせる（弱点属性が分かりやすいように）
   return {
     id: `dungeon_enemy_${enemySeq++}`,
-    name: boss ? `${elemDef.name}の守護者` : `${elemDef.name}の魔獣`,
+    // 種族が決まっている階（1〜25階）はその名前と見た目。未定義の階は汎用の敵
+    name: species ? species.name : boss ? `${elemDef.name}の守護者` : `${elemDef.name}の魔獣`,
+    speciesId: species ? species.id : null,
+    sprite: species ? species.id : null,
     icon: DUNGEON_CONFIG.enemyIcons[boss ? 'boss' : 'grunt'][zone],
     element: zone,
     stats,
