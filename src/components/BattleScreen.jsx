@@ -81,6 +81,16 @@ export default function BattleScreen({ battle, setBattle, onExit, onOpenDictiona
   const [busy, setBusy] = useState(false)                // 行動処理中（アニメーション中）
   const [activeActor, setActiveActor] = useState(null)   // 行動中ハイライト対象
   const [shakes, setShakes] = useState({ player: false, enemy: false })
+  // 敵の上に浮かぶダメージ数字・miss表記（出してから約0.9秒で消す）
+  const [enemyPops, setEnemyPops] = useState([])
+  const popSeq = useRef(0)
+  const showEnemyPops = (pops) => {
+    if (pops.length === 0) return
+    const withIds = pops.map((pop, i) => ({ ...pop, id: ++popSeq.current, order: i }))
+    setEnemyPops((cur) => [...cur, ...withIds])
+    const ids = new Set(withIds.map((pop) => pop.id))
+    setTimeout(() => setEnemyPops((cur) => cur.filter((pop) => !ids.has(pop.id))), 900 + withIds.length * 120)
+  }
   const [seShakes, setSeShakes] = useState({ player: null, enemy: null }) // 状態異常の色付きシェイク（色を保持）
   const [glossTerms, setGlossTerms] = useState(null) // まとめ用語ポップアップ
   const [sePopup, setSePopup] = useState(null) // 状態異常アイコンの詳細ポップアップ
@@ -125,8 +135,22 @@ export default function BattleScreen({ battle, setBattle, onExit, onOpenDictiona
       stepBattle(battle)
       refresh()
       // 状態異常イベント（付与・発動）を取り出す
-      const seEvents = (battle.uiEvents ? battle.uiEvents.splice(0) : [])
+      const uiEvents = battle.uiEvents ? battle.uiEvents.splice(0) : []
+      const seEvents = uiEvents
         .filter((ev) => ev.type === 'ailmentApplied' || ev.type === 'ailmentTriggered')
+      // 敵の上に出すダメージ数字／miss表記
+      const enemyPops = uiEvents
+        .filter((ev) => ev.target === 'enemy' && (ev.type === 'damage' || ev.type === 'miss'))
+        .map((ev) => (ev.type === 'miss'
+          ? { text: 'miss', kind: 'miss' }
+          : { text: String(ev.amount), kind: ev.crit ? 'crit' : 'damage' }))
+      // 攻撃以外で減ったHP（火傷などの継続ダメージ・混乱の自傷）も数字で出す
+      const attackTotal = uiEvents
+        .filter((ev) => ev.target === 'enemy' && ev.type === 'damage')
+        .reduce((sum, ev) => sum + ev.amount, 0)
+      const otherLoss = before.enemy - battle.enemy.stats.hp - attackTotal
+      if (otherLoss > 0) enemyPops.push({ text: String(otherLoss), kind: 'damage' })
+      showEnemyPops(enemyPops)
       // ダメージが入った側のパネルをシェイク（白系）
       const hit = {
         player: battle.player.stats.hp < before.player,
@@ -292,6 +316,18 @@ export default function BattleScreen({ battle, setBattle, onExit, onOpenDictiona
             {/* 被弾中（shakes.enemy）はドット絵を点滅。倒した時は消滅演出を優先 */}
             <div className={`enemy-sprite ${e.stats.hp <= 0 ? 'defeated' : shakes.enemy ? 'hit' : ''} ${enemyDef.isBoss ? 'boss' : ''}`}>
               <PixelSprite enemyDef={enemyDef} element={e.element} />
+            </div>
+            {/* ダメージ数字／miss：敵の真上に浮かんで消える。連続ヒットは少しずつずらして出す */}
+            <div className="dmg-pop-layer">
+              {enemyPops.map((pop) => (
+                <span
+                  key={pop.id}
+                  className={`dmg-pop dmg-${pop.kind}`}
+                  style={{ animationDelay: `${pop.order * 120}ms`, '--pop-x': `${[0, -38, 38][pop.order % 3]}px` }}
+                >
+                  {pop.text}
+                </span>
+              ))}
             </div>
           </div>
         </StatusEffectShake>

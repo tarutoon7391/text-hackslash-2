@@ -1116,3 +1116,37 @@ body::after {
   75%  { opacity: 0; }
   90%, 100% { opacity: 1; }
 }
+
+/* ===== 敵の上のダメージ数字／miss表記 ===== */
+.enemy-stage { position: relative; }
+.dmg-pop-layer {
+  position: absolute;
+  left: 0; right: 0;
+  top: 50%;
+  height: 0;
+  pointer-events: none;
+  z-index: 5;
+}
+.dmg-pop {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  font-size: 30px;
+  font-weight: bold;
+  line-height: 1;
+  white-space: nowrap;
+  opacity: 0;
+  transform: translate(calc(-50% + var(--pop-x, 0px)), 0);
+  animation: dmgPop 0.9s ease-out both;
+  text-shadow: 2px 2px 0 #000, -2px 2px 0 #000, 2px -2px 0 #000, -2px -2px 0 #000;
+}
+.dmg-pop.dmg-damage { color: #ffffff; }
+.dmg-pop.dmg-crit { color: var(--special); font-size: 38px; }
+.dmg-pop.dmg-miss { color: #8a8f99; font-size: 22px; letter-spacing: 2px; }
+@keyframes dmgPop {
+  0%   { opacity: 0; transform: translate(calc(-50% + var(--pop-x, 0px)), 0) scale(0.6); }
+  15%  { opacity: 1; transform: translate(calc(-50% + var(--pop-x, 0px)), -34px) scale(1.15); }
+  30%  { transform: translate(calc(-50% + var(--pop-x, 0px)), -26px) scale(1); }
+  75%  { opacity: 1; transform: translate(calc(-50% + var(--pop-x, 0px)), -34px) scale(1); }
+  100% { opacity: 0; transform: translate(calc(-50% + var(--pop-x, 0px)), -52px) scale(1); }
+}
