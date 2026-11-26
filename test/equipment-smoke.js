@@ -13,6 +13,7 @@ import {
   applySkillTransplant,
   applyEnchantTransplant,
 } from '../src/systems/extractInventoryState.js'
+import { filterAndSortItems, getStatGain, formatStatGain } from '../src/systems/equipmentFilter.js'
 import { JOBS, JOB_IDS, calcJobStats } from '../src/data/jobs.js'
 import { createStarterEquipment } from '../src/data/starterEquipment.js'
 import { RARITIES } from '../src/data/rarities.js'
@@ -222,6 +223,30 @@ console.log('\n====== 6. 職業選択時の装備遷移（フェーズ3パート
   check('転職（武器空のまま）：自動再装備されない', again.slots.weapon === null)
   check('転職（武器空のまま）：防具・アクセは維持',
     again.slots.armor === 'starter_armor' && again.slots.accessory1 === 'acc_a' && again.slots.accessory2 === 'acc_b')
+}
+
+// ============================================================
+// 7. 装備一覧の絞り込み・並べ替え
+// ============================================================
+console.log('\n【7】装備一覧の絞り込み・並べ替え')
+{
+  const list = [
+    { id: 'a', slot: 'armor', def: 5, hp: 10, enchants: [] },
+    { id: 'b', slot: 'armor', def: 9, hp: 4, enchants: [{ enchantId: 'hpPct', value: 6 }] },
+    { id: 'c', slot: 'armor', def: 5, hp: 0, enchants: [{ enchantId: 'defPct', value: 8 }] },
+    { id: 'd', slot: 'armor', def: 0, hp: 0, enchants: [{ enchantId: 'spdPct', value: 3 }] },
+  ]
+  const ids = (arr) => arr.map((it) => it.id).join('')
+  check('指定なしは元の並びのまま全件', ids(filterAndSortItems(list, {})) === 'abcd')
+  check('DEF降順：固定値が高い順、同値は%で比べる', ids(filterAndSortItems(list, { statKey: 'def', order: 'desc' })) === 'bca')
+  check('DEF昇順：降順の逆', ids(filterAndSortItems(list, { statKey: 'def', order: 'asc' })) === 'acb')
+  check('HPで絞り込み：HPが上がらない装備は出ない', ids(filterAndSortItems(list, { statKey: 'hp', order: 'desc' })) === 'ab')
+  check('SPD：エンチャントのみで上がる装備も対象', ids(filterAndSortItems(list, { statKey: 'spd', order: 'desc' })) === 'd')
+  check('該当なしは空', filterAndSortItems(list, { statKey: 'mp' }).length === 0)
+  check('元の配列を書き換えない', ids(list) === 'abcd')
+  const gain = getStatGain(list[1], 'hp')
+  check('上がり幅：固定値と%を別々に持つ', gain.flat === 4 && gain.pct === 6)
+  check('上がり幅の表示テキスト', formatStatGain(list[1], 'hp') === 'HP+4・+6%' && formatStatGain(list[3], 'hp') === null)
 }
 
 // ============================================================

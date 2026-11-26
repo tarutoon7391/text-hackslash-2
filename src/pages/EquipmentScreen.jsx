@@ -10,6 +10,7 @@ import { getElementDef, getElementLabel } from '../data/elements.js'
 import { RARITIES } from '../data/rarities.js'
 import { ENCHANT_RULES } from '../data/itemTemplates.js'
 import { EQUIP_SLOTS, calcTotalStats } from '../systems/equipmentState.js'
+import { FILTER_STATS, filterAndSortItems, formatStatGain } from '../systems/equipmentFilter.js'
 import {
   applySkillTransplant,
   applyEnchantTransplant,
@@ -36,6 +37,8 @@ export default function EquipmentScreen({
   onOpenDictionary,
 }) {
   const [tab, setTab] = useState('weapon')
+  const [filterStat, setFilterStat] = useState(null)  // 絞り込むステータス（null=すべて表示・入手順）
+  const [sortOrder, setSortOrder] = useState('desc')  // 'desc'=大きい順 | 'asc'=小さい順
   const [detailItemId, setDetailItemId] = useState(null)
   const [selectedFrame, setSelectedFrame] = useState(null)     // {kind: 'skill'|'enchant', index}
   const [extractTarget, setExtractTarget] = useState(null)     // {kind, entry} 確認ダイアログ表示中
@@ -48,6 +51,8 @@ export default function EquipmentScreen({
   const baseStats = calcJobStats(jobId)
   const totalStats = calcTotalStats({ baseStats, slots: equipment.slots, itemsById })
   const tabItems = items.filter((it) => it.slot === tab)
+  // 絞り込み・並べ替え：上がるステータスを選ぶと、そのステータスが上がる装備だけを上がり幅順に並べる
+  const visibleItems = filterAndSortItems(tabItems, { statKey: filterStat, order: sortOrder })
   const detailItem = detailItemId ? itemsById[detailItemId] : null
 
   const showToast = (msg, isError = false) => {
@@ -130,6 +135,10 @@ export default function EquipmentScreen({
           </span>
           <span className="weapon-rarity" style={{ color: rarity.color }}>{rarity.name}</span>
         </div>
+        {/* 絞り込み中は、並べ替えの基準になっている上がり幅を目立たせて出す */}
+        {filterStat && formatStatGain(item, filterStat) && (
+          <div className="sort-key-badge">{formatStatGain(item, filterStat)}</div>
+        )}
         <div className="weapon-meta">
           {elem.icon}{getElementLabel(item.element)}
           {item.slot === 'weapon' && ` ／ ${WEAPON_TYPES[item.weaponType].name} ／ ATK+${item.atk}`}
@@ -373,13 +382,44 @@ export default function EquipmentScreen({
             </button>
           ))}
         </div>
+        {/* 絞り込み・並べ替え：上がるステータスを選ぶ → そのステータスの昇順/降順で並ぶ */}
+        <div className="equip-filter">
+          <div className="equip-filter-stats">
+            <button
+              className={`filter-chip ${filterStat === null ? 'selected' : ''}`}
+              onClick={() => setFilterStat(null)}
+            >
+              すべて
+            </button>
+            {FILTER_STATS.map((st) => (
+              <button
+                key={st.key}
+                className={`filter-chip ${filterStat === st.key ? 'selected' : ''}`}
+                onClick={() => setFilterStat(filterStat === st.key ? null : st.key)}
+              >
+                {st.label}
+              </button>
+            ))}
+          </div>
+          <button
+            className="sort-order-btn"
+            disabled={filterStat === null}
+            onClick={() => setSortOrder(sortOrder === 'desc' ? 'asc' : 'desc')}
+          >
+            {sortOrder === 'desc' ? '▼ 降順（高い順）' : '▲ 昇順（低い順）'}
+          </button>
+        </div>
         <div className="equip-list">
           {tabItems.length === 0 ? (
             <div className="equip-hint">
               {TAB_DEFS.find((t) => t.key === tab).label}をまだ持っていない。ダンジョンでドロップを集めよう
             </div>
+          ) : visibleItems.length === 0 ? (
+            <div className="equip-hint">
+              {FILTER_STATS.find((st) => st.key === filterStat).label}が上がる{TAB_DEFS.find((t) => t.key === tab).label}は持っていない
+            </div>
           ) : (
-            tabItems.map(renderItemCard)
+            visibleItems.map(renderItemCard)
           )}
         </div>
       </div>

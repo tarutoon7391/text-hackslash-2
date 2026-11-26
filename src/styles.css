@@ -1153,3 +1153,42 @@ body::after {
 
 /* ダンジョン探索中はフッターナビが無いので、下のセーフエリアは各画面が自分で確保する */
 .dungeon, .loot-screen { padding-bottom: calc(16px + env(safe-area-inset-bottom)); }
+
+/* ===== 装備一覧：絞り込み・並べ替え ===== */
+.equip-filter { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.equip-filter-stats { display: flex; flex-wrap: wrap; gap: 6px; }
+.filter-chip {
+  flex: 1 0 auto;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 8px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: bold;
+}
+.filter-chip.selected {
+  border-color: var(--accent);
+  color: var(--accent);
+  box-shadow: 0 0 8px #00ccff88, inset 0 0 8px #00ccff22;
+}
+.sort-order-btn {
+  min-height: 44px;
+  background: var(--panel);
+  border: 1px solid var(--text);
+  font-size: 12px;
+  font-weight: bold;
+  letter-spacing: 1px;
+}
+.sort-order-btn:disabled { border-color: var(--line); color: var(--muted); }
+.sort-key-badge {
+  display: inline-block;
+  margin-top: 4px;
+  padding: 2px 8px;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: bold;
+  text-shadow: 0 0 6px var(--accent);
+}
