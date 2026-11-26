@@ -1,7 +1,7 @@
 // アプリ全体の画面フロー管理
 // ロビー → ダンジョン → 戦闘 → 勝利ならドロップ結果 →（次の階 or ロビー）
 // 敗北・逃走は常にロビーへ戻る（GDD 14番）
-// 画面全体は「メイン領域＋フッターナビ」の縦シェル構造。フッターは戦闘画面のみ非表示
+// 画面全体は「メイン領域＋フッターナビ」の縦シェル構造。フッターは拠点（ロビー・装備）のみ表示
 // 出発武器は装備スロット（EquipmentScreenで付け替え）から取る。武器入手はインベントリ経由のみ
 // 用語辞典はオーバーレイとして重ねるので、どの画面の状態も失われない
 import { useEffect, useState } from 'react'
@@ -96,8 +96,7 @@ export default function App() {
     setScreen('lobby')
   }
 
-  // フッターナビからの画面切り替え
-  // ダンジョン探索中（ダンジョン/リザルト画面）に拠点系へ移動した場合は探索終了扱い
+  // フッターナビからの画面切り替え（フッターは拠点でしか出ないが、念のため探索中なら探索終了扱いにする）
   const navigate = (tab) => {
     if (tab === 'dictionary') {
       setShowDictionary(true)
@@ -108,8 +107,10 @@ export default function App() {
     setScreen(tab === 'home' ? 'lobby' : 'equipment')
   }
 
-  // フッターは戦闘画面のみ非表示（戦闘に集中させるため）
-  const showFooter = screen !== 'battle'
+  // フッターは拠点（ロビー・装備）にいる時だけ表示する
+  // ダンジョンに潜っている間（ダンジョン・戦闘・リザルト）は出さない：
+  // 戦闘が終わっても下部が切り替わらず、探索中に装備タブへ飛んで探索が終わってしまう事故も防ぐ
+  const showFooter = screen === 'lobby' || screen === 'equipment'
   const activeTab = showDictionary ? 'dictionary' : screen === 'equipment' ? 'equipment' : 'home'
 
   return (

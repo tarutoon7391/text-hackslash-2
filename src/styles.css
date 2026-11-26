@@ -60,7 +60,7 @@ html, body { height: 100%; }
   overflow: hidden;
 }
 
-/* ===== フッター固定ナビ（戦闘画面のみ非表示＝App側で出し分け） ===== */
+/* ===== フッター固定ナビ（拠点＝ロビー・装備のみ表示。App側で出し分け） ===== */
 .footer-nav {
   flex-shrink: 0;
   display: flex;
@@ -1150,3 +1150,6 @@ body::after {
   75%  { opacity: 1; transform: translate(calc(-50% + var(--pop-x, 0px)), -34px) scale(1); }
   100% { opacity: 0; transform: translate(calc(-50% + var(--pop-x, 0px)), -52px) scale(1); }
 }
+
+/* ダンジョン探索中はフッターナビが無いので、下のセーフエリアは各画面が自分で確保する */
+.dungeon, .loot-screen { padding-bottom: calc(16px + env(safe-area-inset-bottom)); }
