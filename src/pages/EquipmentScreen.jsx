@@ -140,6 +140,46 @@ export default function EquipmentScreen({
         {/* スキル/エンチャントは共通チップで表示（タップで詳細ポップアップ） */}
         {item.slot === 'weapon' && <SkillChipList skills={item.skills} onOpenDictionary={onOpenDictionary} />}
         <EnchantChipList enchants={item.enchants} />
+        {renderQuickEquip(item)}
+      </div>
+    )
+  }
+
+  // 一覧カード内のクイック装備ボタン（詳細を開かずに装備／外すができる）
+  // カード自体がタップで詳細を開くので、ボタンのタップは伝播を止める
+  const renderQuickEquip = (item) => {
+    const equippedSlot = equipment.equippedSlotOf(item.id)
+    const slotDefs = EQUIP_SLOTS.filter((s) => s.accepts === item.slot)
+    const jobBlocked =
+      item.slot === 'weapon' && !job.equipableWeaponTypes.includes(item.weaponType)
+    if (jobBlocked) {
+      return (
+        <div className="quick-equip">
+          <span className="equip-block-note">🚫 {job.name}は{WEAPON_TYPES[item.weaponType].name}を装備できない</span>
+        </div>
+      )
+    }
+    return (
+      <div className="quick-equip">
+        {slotDefs.map((slotDef) =>
+          equippedSlot === slotDef.key ? (
+            <button
+              key={slotDef.key}
+              className="quick-equip-btn equipped"
+              onClick={(ev) => { ev.stopPropagation(); equipment.unequip(slotDef.key); showToast(`${slotDef.name}を外した`) }}
+            >
+              外す
+            </button>
+          ) : (
+            <button
+              key={slotDef.key}
+              className="quick-equip-btn"
+              onClick={(ev) => { ev.stopPropagation(); equipTo(slotDef.key, item) }}
+            >
+              {slotDefs.length > 1 ? `${slotDef.name}に装備` : '装備する'}
+            </button>
+          )
+        )}
       </div>
     )
   }

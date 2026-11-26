@@ -1034,3 +1034,73 @@ body::after {
 
 /* トースト */
 .toast { box-shadow: 0 0 12px #00ff4166; }
+
+/* ===== 戦闘：ドラクエ風の敵ステージ =====
+   敵パネルが余った高さを全部使い、中央にドット絵、その真上に名前とHPバー。
+   ログ欄は下に固定高さのウィンドウとして置く（5行ぶん） */
+.battle > .enemy-panel {
+  flex: 1 1 0;
+  min-height: 150px;
+  display: flex;
+  flex-direction: column;
+  /* 床のグリッド線（奥行きの雰囲気づけ） */
+  background:
+    linear-gradient(to top, #00ff4118 0, transparent 45%),
+    repeating-linear-gradient(to right, transparent 0 23px, #00ff4112 23px 24px),
+    var(--panel);
+}
+.enemy-panel > * { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.enemy-stage {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.enemy-hud { width: min(100%, 240px); text-align: center; }
+.enemy-hud .enemy-title { margin-bottom: 4px; text-shadow: 0 0 6px var(--glow); }
+.enemy-hud .effect-row { justify-content: center; }
+.enemy-sprite { line-height: 0; animation: spriteIdle 1.6s steps(2, end) infinite; }
+.enemy-sprite.boss .pixel-sprite { width: 168px; height: 168px; }
+.pixel-sprite {
+  image-rendering: pixelated;
+  filter: drop-shadow(0 0 6px #00000099);
+  max-height: 100%;
+}
+/* 待機中は2コマでふわっと上下（ドット絵らしくカクッと動かす） */
+@keyframes spriteIdle {
+  0% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+  100% { transform: translateY(0); }
+}
+/* 倒したら点滅して消える */
+.enemy-sprite.defeated { animation: spriteDefeat 0.6s steps(6, end) forwards; }
+@keyframes spriteDefeat {
+  0%, 40%, 80% { opacity: 1; }
+  20%, 60% { opacity: 0.15; }
+  100% { opacity: 0; }
+}
+.battle > .log-recent {
+  flex: 0 0 auto;
+  height: 104px;
+  border: 1px solid var(--text);
+  box-shadow: inset 0 0 10px #00ff4122;
+}
+
+/* ===== 装備一覧：カード内のクイック装備ボタン ===== */
+.quick-equip { display: flex; gap: 6px; margin-top: 8px; }
+.quick-equip-btn {
+  flex: 1;
+  min-height: 44px;
+  background: var(--bg);
+  border: 1px solid var(--text);
+  font-size: 12px;
+  font-weight: bold;
+  letter-spacing: 1px;
+  transition: background-color 0.15s, box-shadow 0.15s;
+}
+.quick-equip-btn:hover, .quick-equip-btn:active { background: #00ff4122; box-shadow: 0 0 8px var(--glow); }
+.quick-equip-btn.equipped { border-color: var(--accent); color: var(--accent); }
+.quick-equip-btn.equipped:hover, .quick-equip-btn.equipped:active { background: #00ccff22; box-shadow: 0 0 8px var(--accent); }

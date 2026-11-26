@@ -11,6 +11,7 @@ import {
   getActionList, getManualTargetCandidates, statLabel,
 } from '../systems/battleEngine.js'
 import ActionMenu from './battle/ActionMenu.jsx'
+import PixelSprite from './battle/PixelSprite.jsx'
 import SkillDetailPopup from './battle/SkillDetailPopup.jsx'
 import TargetSelector from './battle/TargetSelector.jsx'
 import StatusEffectShake from './battle/StatusEffectShake.jsx'
@@ -276,9 +277,9 @@ export default function BattleScreen({ battle, setBattle, onExit, onOpenDictiona
         onClick={onEnemyTap}
       >
         <StatusEffectShake color={seShakes.enemy}>
-          <div className="enemy-header">
-            <span className="enemy-big-icon">{enemyDef.icon}</span>
-            <div className="enemy-info">
+          {/* ドラクエ風の敵ステージ：敵のドット絵を中央に置き、名前とHPバーはその真上 */}
+          <div className="enemy-stage">
+            <div className="enemy-hud">
               <div className="enemy-title">
                 {e.name}
                 <span className="elem-chip" onClick={(ev) => onElemChipTap(ev, e.element)}>
@@ -286,9 +287,12 @@ export default function BattleScreen({ battle, setBattle, onExit, onOpenDictiona
                 </span>
               </div>
               <Bar label="HP" value={e.stats.hp} max={e.stats.maxHp} color="#e05555" />
+              <EffectIcons combatant={e} onAilmentTap={onAilmentTap} />
+            </div>
+            <div className={`enemy-sprite ${e.stats.hp <= 0 ? 'defeated' : ''} ${enemyDef.isBoss ? 'boss' : ''}`}>
+              <PixelSprite enemyDef={enemyDef} element={e.element} />
             </div>
           </div>
-          <EffectIcons combatant={e} onAilmentTap={onAilmentTap} />
         </StatusEffectShake>
       </div>
 
