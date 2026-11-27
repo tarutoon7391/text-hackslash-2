@@ -8,13 +8,15 @@ import { PROGRESSION_CONFIG } from '../../data/progressionConfig.js'
 import SkillChipList from '../common/SkillChipList.jsx'
 import EnchantChipList from '../common/EnchantChipList.jsx'
 import PixelSprite from '../battle/PixelSprite.jsx'
+import { ALL_SKILLS_BY_ID } from '../../data/skills_elemental.js'
 
 const SLOT_LABELS = { weapon: '武器', armor: '防具', accessory: 'アクセサリー' }
 
 export default function LootResultScreen({ result, jobName, hp = null, maxHp = null, allyStatus = null, onNext, onLobby, onOpenDictionary }) {
   // recruited：勧誘で仲間にしたモンスター（その場合は敵を倒していないのでドロップ＝item・shardsは無い）
   // ally：連れている仲間の経験値結果 {name, levelBefore, levelAfter}（連れていなければnull）
-  const { floor, item, shards, exp, levelBefore, levelAfter, recruited = null, ally = null } = result
+  // book：スキルの書が落ちた時のスキルID（落ちていなければnull）
+  const { floor, item, shards, exp, levelBefore, levelAfter, recruited = null, ally = null, book = null } = result
   const rarity = item ? RARITIES[item.rarity] : null
   const leveledUp = levelAfter > levelBefore
 
@@ -74,6 +76,23 @@ export default function LootResultScreen({ result, jobName, hp = null, maxHp = n
           </div>
         )}
       </div>
+
+      {/* スキルの書（たまに落ちる） */}
+      {book && ALL_SKILLS_BY_ID[book] && (
+        <>
+          <div className="loot-drop-label">スキルの書を拾った！</div>
+          <div className="loot-card book-card">
+            <div className="loot-head">
+              <span className="loot-name">📜 {ALL_SKILLS_BY_ID[book].name}の書</span>
+              <span className="loot-rarity">{'★'.repeat(ALL_SKILLS_BY_ID[book].star)}</span>
+            </div>
+            <div className="loot-meta">
+              {getElementDef(ALL_SKILLS_BY_ID[book].element).icon}{getElementLabel(ALL_SKILLS_BY_ID[book].element)} ／ {ALL_SKILLS_BY_ID[book].desc}
+            </div>
+            <div className="loot-meta">装備画面で武器に使うと、このスキルを覚えさせられる（1回で無くなる）</div>
+          </div>
+        </>
+      )}
 
       {/* 装備ドロップ（落ちた時だけ） */}
       {item ? (

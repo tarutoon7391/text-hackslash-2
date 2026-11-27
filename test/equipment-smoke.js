@@ -19,6 +19,8 @@ import {
   buildSkillPool, buildEnchantPool, skillInheritBlockReason, skillPlusChance, countSkillDuplicates,
 } from '../src/systems/fusionSystem.js'
 import { getSkillMpCost } from '../src/systems/battleEngine.js'
+import { generateSkillBook, previewSkillBook, applySkillBook } from '../src/systems/skillBook.js'
+import { ALL_SKILLS_BY_ID } from '../src/data/skills_elemental.js'
 import { SKILLS_NORMAL } from '../src/data/skills_normal.js'
 import { SKILLS_ELEMENTAL } from '../src/data/skills_elemental.js'
 import { applyJobExp, expToNextLevel, enemyExpFor, shardTierForFloor } from '../src/systems/progressState.js'
@@ -708,6 +710,67 @@ console.log('\n【14】スキルの+値')
   check('+値で消費MPが少しだけ減る（+5でも1割以内）',
     getSkillMpCost({ skillId: mpSkill.id, plus: 5 }) <= getSkillMpCost({ skillId: mpSkill.id, plus: 0 }) &&
     getSkillMpCost({ skillId: mpSkill.id, plus: 5 }) >= Math.floor(mpSkill.mp * 0.9))
+}
+
+// ============================================================
+// 15. スキルの書
+// ============================================================
+console.log('\n【15】スキルの書')
+{
+  const rng = createSeededRng(2024)
+  // 中身：敵の属性のスキルだけ。★はレア度の抽選に従う
+  const stars = { grunt: {}, boss: {} }
+  let elementOk = true
+  for (let i = 0; i < 3000; i++) {
+    for (const grade of ['grunt', 'boss']) {
+      const el = ELEMENT_IDS[i % ELEMENT_IDS.length]
+      const sk = ALL_SKILLS_BY_ID[generateSkillBook({ element: el, grade, rng })]
+      if (!sk || sk.element !== el) elementOk = false
+      stars[grade][sk.star] = (stars[grade][sk.star] || 0) + 1
+    }
+  }
+  check('書の中身は必ず敵と同じ属性のスキル', elementOk)
+  const avg = (o) => Object.entries(o).reduce((a, [k, v]) => a + Number(k) * v, 0) / 3000
+  check('雑魚の書は★1が中心', (stars.grunt[1] || 0) / 3000 > 0.6, `(★1: ${((stars.grunt[1] || 0) / 30).toFixed(0)}%)`)
+  check('ボスの書のほうが★が高い（装備と同じレア度表）', avg(stars.boss) > avg(stars.grunt), `(平均★ 雑魚${avg(stars.grunt).toFixed(2)} / ボス${avg(stars.boss).toFixed(2)})`)
+  check('ボスの書からは★3以上も出る', (stars.boss[3] || 0) + (stars.boss[4] || 0) > 0)
+  check('属性スキルを持たない属性は書が出ない', generateSkillBook({ element: 'none', grade: 'grunt', rng }) === null)
+
+  // ドロップ率：装備より低い・ボスでも確定ではない
+  let bookG = 0, bookB = 0, equipG = 0, zoneOk = true
+  const N = 4000
+  for (let i = 0; i < N; i++) {
+    const g = generateDrops({ floor: 3, grade: 'grunt', rng }); if (g.book) { bookG++; if (ALL_SKILLS_BY_ID[g.book].element !== 'fire') zoneOk = false } if (g.item) equipG++
+    const b = generateDrops({ floor: 10, grade: 'boss', rng }); if (b.book) { bookB++; if (ALL_SKILLS_BY_ID[b.book].element !== 'water') zoneOk = false }
+  }
+  check('雑魚の書ドロップは装備より低い（約6%）', bookG < equipG && Math.abs(bookG / N - DUNGEON_CONFIG.drops.grunt.bookChance) < 0.02, `(書${(bookG / N * 100).toFixed(1)}% / 装備${(equipG / N * 100).toFixed(1)}%)`)
+  check('ボスでも書は確定ではない（約12%）', bookB < N * 0.2 && bookB > 0, `(${(bookB / N * 100).toFixed(1)}%)`)
+  check('落ちる書はその階の敵の属性（3階=火、10階=水）', zoneOk)
+
+  // 使う
+  const fire = SKILLS_ELEMENTAL.filter((sk) => sk.element === 'fire')
+  const mkW = (rarity, skills) => ({ id: 'w', slot: 'weapon', weaponType: 'bow', rarity, name: '弓', atk: 10, skills, enchants: [] })
+  const free = mkW('epic', [{ skillId: fire[0].id, plus: 0 }])
+  check('空き枠があれば「覚える」', previewSkillBook(free, fire[1].id).kind === 'add')
+  const added = applySkillBook({ weapon: free, skillId: fire[1].id })
+  check('書を使うとスキルを覚える（武器種は問わない）', !added.error && added.kind === 'add' && added.item.skills.length === 2 && added.item.skills[1].skillId === fire[1].id)
+  check('元の武器を書き換えない', free.skills.length === 1)
+
+  const full = mkW('common', [{ skillId: fire[0].id, plus: 2 }])
+  check('枠が埋まっていれば「入れ替える」', previewSkillBook(full, fire[1].id).kind === 'replace')
+  check('入れ替える枠を選ばないと使えない', Boolean(applySkillBook({ weapon: full, skillId: fire[1].id }).error))
+  const replaced = applySkillBook({ weapon: full, skillId: fire[1].id, replaceIndex: 0 })
+  check('選んだ枠のスキルと入れ替わる（+値は0から）', !replaced.error && replaced.item.skills.length === 1 && replaced.item.skills[0].skillId === fire[1].id && replaced.item.skills[0].plus === 0)
+
+  const pv = previewSkillBook(full, fire[0].id)
+  check('同じスキルの書は+値チャンスになる（+値が高いほど低い）', pv.kind === 'plus' && pv.chance === skillPlusChance(2))
+  const hit = applySkillBook({ weapon: full, skillId: fire[0].id, rng: () => 0 })
+  const miss = applySkillBook({ weapon: full, skillId: fire[0].id, rng: () => 0.9999 })
+  check('当たれば+1、外れても書は使った扱い', hit.plusUp.to === 3 && hit.item.skills[0].plus === 3 && !miss.error && miss.plusUp === null && miss.item.skills[0].plus === 2)
+  check('上限まで育ったスキルの書は使えない',
+    previewSkillBook(mkW('common', [{ skillId: fire[0].id, plus: PROGRESSION_CONFIG.skillPlus.max }]), fire[0].id).kind === 'blocked')
+  check('武器以外には使えない', Boolean(applySkillBook({ weapon: { id: 'a', slot: 'armor', rarity: 'rare' }, skillId: fire[0].id }).error))
+  check('スキル枠のない武器（ユニーク）には使えない', previewSkillBook(mkW('unique', []), fire[0].id).kind === 'blocked')
 }
 
 // ============================================================

@@ -147,6 +147,11 @@ export const PIXEL_ICONS = {
     '.s...ss...s.', '.ssssssssss.', '..ssssssss..', '..skkwwkks..', '..ssssssss..', 'ssssssssssss',
     'ssSsrrrrsSss', 'ssSsrrrrsSss', '.sSssssssSs.', '...ss..ss...', '..sss..sss..', '............',
   ],
+  // ===== スキルの書 =====
+  scroll: [
+    '..nnnnnnnn..', '.nwwwwwwwwn.', '.nwwwwwwwwn.', '..wkkkkkkw..', '..wwwwwwww..', '..wkkkkwww..',
+    '..wwwwwwww..', '..wkkkkkkw..', '..wwwwwwww..', '.nwwwwwwwwn.', '.nwwwwwwwwn.', '..nnnnnnnn..',
+  ],
   // ===== 素材・合成・演出 =====
   shard: [
     '.....cc.....', '....cwcc....', '...cwwccc...', '..cwwccccc..', '.cwwccccccc.', 'cwccccccccCC',
@@ -202,7 +207,7 @@ export const EMOJI_TO_ICON = {
   '🔥': 'fire', '💧': 'water', '⚡': 'thunder', '⛰': 'earth', '☀': 'light', '🌑': 'dark', '◽': 'none',
   '🧊': 'ice', '💫': 'confusion', '💀': 'skull',
   '⚔': 'attack', '✨': 'sparkle', '🤝': 'heart', '🏃': 'exit', '🏰': 'castle', '🎒': 'bag',
-  '🔷': 'shard', '⚒': 'hammer', '🎉': 'star', '⚠': 'warning', '🚫': 'forbidden',
+  '📜': 'scroll', '🔷': 'shard', '⚒': 'hammer', '🎉': 'star', '⚠': 'warning', '🚫': 'forbidden',
   // 敵：雑魚は魔獣の顔、ボスは守護者の顔にまとめる
   '🦊': 'beast', '🐟': 'beast', '🦅': 'beast', '🐗': 'beast', '🦄': 'beast', '🦇': 'beast',
   '👺': 'beast', '🦎': 'beast', '👤': 'beast',

@@ -8,6 +8,7 @@ import { RARITIES } from '../data/rarities.js'
 import { ARMOR_TEMPLATE, ACCESSORY_TEMPLATE, ENCHANTS, ENCHANT_RULES } from '../data/itemTemplates.js'
 import { generateWeapon } from './weaponGenerator.js'
 import { floorToZoneElement } from './dungeonState.js'
+import { generateSkillBook } from './skillBook.js'
 
 let itemSeq = 1
 
@@ -137,7 +138,8 @@ export function generateLoot({ floor, grade, rng = Math.random }) {
 }
 
 // 勝利時のドロップ一式を生成する（素材メイン。装備は雑魚だとたまに、ボスは確定）
-// 戻り値：{ item（装備 or null）, shards: {tier, count} }
+// 戻り値：{ item（装備 or null）, shards: {tier, count}, book（スキルの書のスキルID or null） }
+// スキルの書：装備より低い確率でたまに落ちる。中身はその階の敵の属性のスキル
 // 装備のIDはセーブをまたいでも重複しないよう、連番ではなく一意な文字列に付け直す
 export function generateDrops({ floor, grade, rng = Math.random }) {
   const cfg = DUNGEON_CONFIG.drops[grade]
@@ -153,5 +155,10 @@ export function generateDrops({ floor, grade, rng = Math.random }) {
     item.plus = 0
     item.plusExp = 0
   }
-  return { item, shards }
+  // スキルの書（敵の属性＝その階のゾーン属性のスキル。確定ドロップなし）
+  let book = null
+  if (rng() < (cfg.bookChance || 0)) {
+    book = generateSkillBook({ element: floorToZoneElement(floor), grade, rng })
+  }
+  return { item, shards, book }
 }

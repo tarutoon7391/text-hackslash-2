@@ -42,9 +42,10 @@ export const DUNGEON_CONFIG = {
   // 勝利時に何が落ちるか（TODO: 仮値・実装後調整）
   // equipChance：装備が落ちる確率／shards：欠片の個数レンジ（必ず落ちる）
   // 雑魚は素材メイン（装備はたまに）、ボスは装備確定
+  // bookChance：スキルの書が落ちる確率（装備より低め。ボスでも確定では落ちない）
   drops: {
-    grunt: { equipChance: 0.15, shards: [2, 3] },
-    boss: { equipChance: 1, shards: [6, 8] },
+    grunt: { equipChance: 0.15, bookChance: 0.06, shards: [2, 3] },
+    boss: { equipChance: 1, bookChance: 0.12, shards: [6, 8] },
   },
 
   // ドロップ部位の重み（TODO: 仮値）

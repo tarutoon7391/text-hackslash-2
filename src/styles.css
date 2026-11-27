@@ -1385,3 +1385,13 @@ body::after {
 
 /* 合成：スキルの+値チャンス表示 */
 .keep-chip small.skill-plus-chance { color: var(--accent); }
+
+/* ===== スキルの書 ===== */
+.book-card { border-color: var(--accent); box-shadow: 0 0 8px #00ccff66; }
+.book-row { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border: 1px solid var(--line); background: var(--panel); margin-bottom: 4px; }
+.book-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.book-name { font-size: 12px; font-weight: bold; color: var(--elem-color, var(--text)); }
+.book-desc { font-size: 10px; color: var(--muted); }
+.book-use-btn { flex: 0 0 auto; min-width: 92px; padding: 0 8px; font-size: 11px; }
+.book-use-btn:disabled { border-color: var(--line); color: var(--muted); }
+.book-replace { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }

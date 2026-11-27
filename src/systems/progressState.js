@@ -66,6 +66,7 @@ function migrateShards(saved) {
 export function useProgressState() {
   const [jobLevels, setJobLevels] = usePersistentState('jobLevels', defaultJobLevels(), migrateJobLevels)
   const [shards, setShards] = usePersistentState('shards', {}, migrateShards) // {ランク: 個数}
+  const [books, setBooks] = usePersistentState('skillBooks', {}, migrateShards) // {スキルID: 冊数}（形が欠片と同じなので補正も共用）
 
   // 経験値を加算する。戻り値は {before, after}（レベルアップ表示用）
   const gainExp = (jobId, amount) => {
@@ -89,5 +90,16 @@ export function useProgressState() {
       return next
     })
 
-  return { jobLevels, shards, gainExp, addShards, spendShards }
+  // スキルの書：{スキルID: 冊数}
+  const addBook = (skillId) => setBooks((prev) => ({ ...prev, [skillId]: (prev[skillId] || 0) + 1 }))
+  // スキルの書を1冊消費する
+  const spendBook = (skillId) =>
+    setBooks((prev) => {
+      const next = { ...prev }
+      next[skillId] = Math.max(0, (next[skillId] || 0) - 1)
+      if (next[skillId] === 0) delete next[skillId]
+      return next
+    })
+
+  return { jobLevels, shards, books, gainExp, addShards, spendShards, addBook, spendBook }
 }

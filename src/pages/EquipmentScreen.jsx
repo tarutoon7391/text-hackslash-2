@@ -13,6 +13,7 @@ import { ALL_SKILLS_BY_ID } from '../data/skills_elemental.js'
 import { EQUIP_SLOTS } from '../systems/equipmentState.js'
 import { buildPlayerStats, getItemStats } from '../systems/playerStats.js'
 import { fuse, skillSlotCount, enchantSlotCount, expToNextPlus } from '../systems/fusionSystem.js'
+import { previewSkillBook, applySkillBook } from '../systems/skillBook.js'
 import { FILTER_STATS, filterAndSortItems, formatStatGain } from '../systems/equipmentFilter.js'
 import SkillChipList from '../components/common/SkillChipList.jsx'
 import EnchantChipList from '../components/common/EnchantChipList.jsx'
@@ -31,6 +32,8 @@ export default function EquipmentScreen({
   equipment,
   shards = {},
   onSpendShards,
+  books = {},
+  onSpendBook,
   onRemoveItems,
   onUpdateItem,
   onBack,
@@ -41,6 +44,7 @@ export default function EquipmentScreen({
   const [sortOrder, setSortOrder] = useState('desc')  // 'desc'=大きい順 | 'asc'=小さい順
   const [detailItemId, setDetailItemId] = useState(null)
   const [fusionBaseId, setFusionBaseId] = useState(null)       // 合成画面を開いているベース装備のID
+  const [replacingBook, setReplacingBook] = useState(null)     // 入れ替える枠を選んでいる途中のスキルの書（スキルID）
   const [toast, setToast] = useState(null)                     // {msg, isError}
   const toastTimer = useRef(null)
 
@@ -71,7 +75,32 @@ export default function EquipmentScreen({
   // ===== 詳細ビューの開閉 =====
 
   const openDetail = (itemId) => setDetailItemId(itemId)
-  const closeDetail = () => setDetailItemId(null)
+  const closeDetail = () => { setDetailItemId(null); setReplacingBook(null) }
+
+  // ===== スキルの書 =====
+  // 持っている書の一覧（★の高い順→名前順）
+  const bookList = Object.keys(books)
+    .filter((id) => books[id] > 0 && ALL_SKILLS_BY_ID[id])
+    .map((id) => ({ skill: ALL_SKILLS_BY_ID[id], count: books[id] }))
+    .sort((a, b) => b.skill.star - a.skill.star || a.skill.name.localeCompare(b.skill.name, 'ja'))
+
+  // 書を武器に使う（replaceIndex：枠が埋まっている時に入れ替える枠）
+  const useBook = (weapon, skillId, replaceIndex = null) => {
+    const result = applySkillBook({ weapon, skillId, replaceIndex })
+    if (result.error) {
+      showToast(`🚫 ${result.error}`, true)
+      return
+    }
+    onUpdateItem(result.item)
+    onSpendBook(skillId)
+    setReplacingBook(null)
+    const name = ALL_SKILLS_BY_ID[skillId].name
+    if (result.kind === 'plus') {
+      showToast(result.plusUp ? `✨ ${name} +${result.plusUp.from}→+${result.plusUp.to}` : `${name}の書を使ったが、+値は上がらなかった`, !result.plusUp)
+    } else {
+      showToast(result.kind === 'add' ? `${name} を覚えた` : `${name} に入れ替えた`)
+    }
+  }
 
   // ===== 合成 =====
   // 親にできるのは「同じ部位・ベース以外・装備中でない」装備
@@ -281,6 +310,48 @@ export default function EquipmentScreen({
             <>
               <h2 className="section-label">スキル（{(item.skills || []).length}/{skillSlotCount(item)}枠）</h2>
               <SkillChipList skills={item.skills} onOpenDictionary={onOpenDictionary} />
+
+              {/* スキルの書を使う：同じスキルなら+値チャンス／空き枠があれば覚える／埋まっていれば入れ替え */}
+              <h2 className="section-label">スキルの書を使う</h2>
+              {bookList.length === 0 ? (
+                <div className="equip-hint">スキルの書を持っていない。敵がたまに落とす（その敵の属性のスキル）</div>
+              ) : (
+                bookList.map(({ skill, count }) => {
+                  const pv = previewSkillBook(item, skill.id)
+                  const label = pv.kind === 'plus' ? `+1チャンス ${Math.round(pv.chance * 100)}%`
+                    : pv.kind === 'add' ? '覚える'
+                    : pv.kind === 'replace' ? '入れ替える'
+                    : '使えない'
+                  return (
+                    <div key={skill.id} className="book-row">
+                      <div className="book-info">
+                        <span className={`book-name elem-${skill.element}`}>📜 {'★'.repeat(skill.star)} {skill.name} ×{count}</span>
+                        <span className="book-desc">{pv.kind === 'blocked' ? pv.reason : skill.desc}</span>
+                      </div>
+                      <button
+                        className="quick-equip-btn book-use-btn"
+                        disabled={pv.kind === 'blocked'}
+                        onClick={() => (pv.kind === 'replace' ? setReplacingBook(skill.id) : useBook(item, skill.id))}
+                      >
+                        {label}
+                      </button>
+                    </div>
+                  )
+                })
+              )}
+              {replacingBook && ALL_SKILLS_BY_ID[replacingBook] && (
+                <div className="book-replace">
+                  <div className="depart-note">
+                    「{ALL_SKILLS_BY_ID[replacingBook].name}」と入れ替えるスキルを選ぶ（選んだスキルは消える）
+                  </div>
+                  {(item.skills || []).map((ref, index) => (
+                    <button key={index} className="use-btn danger" onClick={() => useBook(item, replacingBook, index)}>
+                      {ALL_SKILLS_BY_ID[ref.skillId]?.name}{ref.plus > 0 ? `(+${ref.plus})` : ''} を消して入れ替える
+                    </button>
+                  ))}
+                  <button className="back-btn" onClick={() => setReplacingBook(null)}>やめる</button>
+                </div>
+              )}
             </>
           )}
           <h2 className="section-label">エンチャント（{(item.enchants || []).length}/{enchantSlotCount(item)}枠）</h2>
@@ -342,6 +413,21 @@ export default function EquipmentScreen({
               <span key={tier} className="skill-chip shard-chip">🔷 ランク{tier} ×{shards[tier]}</span>
             ))}
           </div>
+        )}
+
+        {/* スキルの書の所持数（使うのは武器の詳細画面から） */}
+        <h2 className="section-label">スキルの書</h2>
+        {bookList.length === 0 ? (
+          <div className="equip-hint">まだ持っていない。敵がたまに落とす</div>
+        ) : (
+          <>
+            <div className="chip-list">
+              {bookList.map(({ skill, count }) => (
+                <span key={skill.id} className={`skill-chip elem-${skill.element}`}>📜 {'★'.repeat(skill.star)} {skill.name} ×{count}</span>
+              ))}
+            </div>
+            <div className="equip-hint">武器をタップして詳細を開くと、スキルの書を使える</div>
+          </>
         )}
 
         {/* 種別タブ＋所持アイテム一覧 */}

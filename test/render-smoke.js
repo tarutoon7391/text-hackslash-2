@@ -146,6 +146,12 @@ try {
     result: { floor: 2, item: null, shards: { tier: 1, count: 2 }, exp: 16, levelBefore: 1, levelAfter: 1 },
     jobName: '剣士', onNext: () => {}, onLobby: () => {}, onOpenDictionary: () => {},
   }))
+  const fireBook = (await server.ssrLoadModule('/src/data/skills_elemental.js')).SKILLS_ELEMENTAL.find((sk) => sk.element === 'fire')
+  const lootBook = render(React.createElement(LootResultScreen, {
+    result: { floor: 2, item: null, shards: { tier: 1, count: 2 }, book: fireBook.id, exp: 16, levelBefore: 1, levelAfter: 1 },
+    jobName: '剣士', onNext: () => {}, onLobby: () => {}, onOpenDictionary: () => {},
+  }))
+  check('リザルト：スキルの書が出る', lootBook.includes('スキルの書を拾った') && lootBook.includes(`${fireBook.name}の書`))
   check('リザルト：装備なしでも描画できる', lootNoItem.includes('装備は落ちなかった') && !lootNoItem.includes('レベルアップ'))
 
   // ============================================================

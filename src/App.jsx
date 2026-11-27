@@ -114,8 +114,10 @@ export default function App() {
     } else if (result === 'win' && floor != null) {
       const boss = isBossFloor(floor)
       // ドロップ：欠片は必ず、装備は雑魚だとたまに・ボスは確定
-      const { item, shards } = generateDrops({ floor, grade: boss ? 'boss' : 'grunt' })
+      // スキルの書は、装備より低い確率でたまに落ちる（その階の敵の属性のスキル）
+      const { item, shards, book } = generateDrops({ floor, grade: boss ? 'boss' : 'grunt' })
       if (item) inventory.addItem(item)
+      if (book) progress.addBook(book)
       progress.addShards(shards.tier, shards.count)
       // 経験値：今の職業に入る
       const exp = enemyExpFor({ floor, boss })
@@ -128,7 +130,7 @@ export default function App() {
       setRunHp(hpLeft)
       setRunAllyHp(allyHpLeft)
       setLastResult({
-        floor, item, shards, exp, levelBefore: before.level, levelAfter: after.level,
+        floor, item, shards, book, exp, levelBefore: before.level, levelAfter: after.level,
         ally: allyGain && { name: partner.name, levelBefore: allyGain.before.level, levelAfter: allyGain.after.level },
       })
       setScreen('loot')
@@ -201,6 +203,8 @@ export default function App() {
             equipment={equipment}
             shards={progress.shards}
             onSpendShards={progress.spendShards}
+            books={progress.books}
+            onSpendBook={progress.spendBook}
             onRemoveItems={inventory.removeItems}
             onUpdateItem={inventory.updateItem}
             onBack={() => setScreen('lobby')}
