@@ -1356,3 +1356,15 @@ body::after {
   font-size: 13px;
 }
 .party-row .party-sub { color: var(--muted); font-size: 11px; }
+
+/* ===== HP/MPバーの横並び表示（プレイヤー・仲間のパネル） =====
+   ラベル・バー本体・数値を1行に並べる。バー本体は残り幅ぶんだけ（短め）になる */
+.stat-bars { display: flex; gap: 12px; }
+.bar-wrap.inline { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; margin-bottom: 0; }
+.bar-wrap.inline .bar-bg { flex: 1; min-width: 24px; }
+.bar-inline-label { font-size: 10px; color: var(--muted); }
+.bar-inline-value { font-size: 11px; white-space: nowrap; }
+.ally-line { display: flex; align-items: center; gap: 10px; }
+.ally-name { font-size: 13px; font-weight: bold; white-space: nowrap; display: flex; align-items: center; gap: 4px; }
+.ally-down-label { font-size: 10px; color: var(--danger); font-weight: normal; }
+.ally-panel .effect-row:empty { display: none; }

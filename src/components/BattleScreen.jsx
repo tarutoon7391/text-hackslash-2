@@ -25,8 +25,22 @@ import { renderGlossaryText } from '../utils/glossaryText.js'
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
 // HP/MPバー
-function Bar({ label, value, max, color }) {
+// HP/MPバー
+// inline=true：ラベル・バー本体・数値を横一列に並べる（バー本体は短め）。プレイヤーと仲間のパネル用
+// inline=false：ラベルと数値を上に、バーを下に置く2段表示。敵の頭上のHPバー用
+function Bar({ label, value, max, color, inline = false }) {
   const pct = Math.max(0, Math.min(100, (value / max) * 100))
+  if (inline) {
+    return (
+      <div className="bar-wrap inline">
+        <span className="bar-inline-label">{label}</span>
+        <div className="bar-bg">
+          <div className="bar-fill" style={{ width: `${pct}%`, background: color }} />
+        </div>
+        <span className="bar-inline-value">{value}/{max}</span>
+      </div>
+    )
+  }
   return (
     <div className="bar-wrap">
       <div className="bar-label">
@@ -367,8 +381,11 @@ export default function BattleScreen({ battle, setBattle, onExit, onOpenDictiona
             </span>
             <span className="turn-label">ターン{battle.turn}</span>
           </div>
-          <Bar label="HP" value={p.stats.hp} max={p.stats.maxHp} color="#4caf7d" />
-          <Bar label="MP" value={p.stats.mp} max={p.stats.maxMp} color="#4a90d9" />
+          {/* HPとMPは横並び（1行に収める） */}
+          <div className="stat-bars">
+            <Bar inline label="HP" value={p.stats.hp} max={p.stats.maxHp} color="#4caf7d" />
+            <Bar inline label="MP" value={p.stats.mp} max={p.stats.maxMp} color="#4a90d9" />
+          </div>
           <EffectIcons combatant={p} onAilmentTap={onAilmentTap} />
         </StatusEffectShake>
       </div>
@@ -380,12 +397,15 @@ export default function BattleScreen({ battle, setBattle, onExit, onOpenDictiona
             <PixelSprite enemyDef={{ isBoss: a.allyDef.isBoss, sprite: a.allyDef.sprite }} element={a.element} size={36} />
           </div>
           <div className="ally-info">
-            <div className="player-name">
-              {a.name}
-              <span className="elem-chip">{getElementDef(a.element).icon}{getElementDef(a.element).name}</span>
-              {a.stats.hp <= 0 && <span className="turn-label">戦闘不能</span>}
+            {/* 名前とHPバーを横並び（1行に収める） */}
+            <div className="ally-line">
+              <span className="ally-name">
+                {a.name}
+                <span className="elem-chip">{getElementDef(a.element).icon}{getElementDef(a.element).name}</span>
+                {a.stats.hp <= 0 && <span className="ally-down-label">戦闘不能</span>}
+              </span>
+              <Bar inline label="HP" value={a.stats.hp} max={a.stats.maxHp} color="#4caf7d" />
             </div>
-            <Bar label="HP" value={a.stats.hp} max={a.stats.maxHp} color="#4caf7d" />
             <EffectIcons combatant={a} onAilmentTap={onAilmentTap} />
           </div>
         </div>
