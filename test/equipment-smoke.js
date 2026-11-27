@@ -30,6 +30,8 @@ import {
 import { ENEMY_SPECIES_BY_BLOCK, SPECIES_SPRITES, getSpeciesForFloor } from '../src/data/enemySpecies.js'
 import { ENEMY_SPRITES, resolveSpriteKey } from '../src/data/enemySprites.js'
 import { DUNGEON_CONFIG } from '../src/data/dungeonConfig.js'
+import { getElementMultiplier, ELEMENT_IDS } from '../src/data/elements.js'
+import { resolveEffectKind, EFFECTS, getEffectFrames, FX_GRID } from '../src/data/attackEffects.js'
 import { generateDrops } from '../src/systems/lootSystem.js'
 import { createSeededRng } from '../src/systems/weaponGenerator.js'
 import { PROGRESSION_CONFIG } from '../src/data/progressionConfig.js'
@@ -587,6 +589,72 @@ console.log('\n【12】仲間と一緒に戦う')
   const solo = winRate(false), duo = winRate(true)
   check('仲間がいるほうが勝率が高い', duo > solo, `(ソロ${solo}% → 仲間あり${duo}%)`)
   console.log(`    参考：5階ボス（初期Lv1・武器ATK10・通常攻撃のみ）勝率 ソロ${solo}% → 仲間ヒノコLv4あり${duo}%`)
+}
+
+// ============================================================
+// 13. モンスターの攻撃は本体の属性攻撃／攻撃演出
+// ============================================================
+console.log('\n【13】モンスターの属性攻撃・攻撃演出')
+{
+  const fireEnemy = () => generateEnemy({ floor: 1 }) // 1階は火の敵
+  const weakToFire = ELEMENT_IDS.find((el) => getElementMultiplier('fire', el) > 1)
+  const resistsFire = ELEMENT_IDS.find((el) => getElementMultiplier('fire', el) < 1)
+  const sword = (element) => ({ id: 'w', slot: 'weapon', weaponType: 'sword', element, atk: 10, skills: [], enchants: [] })
+  const runRound = (b, action) => { beginRound(b, action); let g = 0; while (b.phase === 'acting' && g++ < 50) stepBattle(b) }
+  // 敵の攻撃イベントを1つ拾う（外れることがあるので当たるまでシードを変える）
+  const enemyHit = (weaponElement) => {
+    for (let seed = 1; seed < 60; seed++) {
+      const b = createBattle({ jobId: 'swordsman', weapon: sword(weaponElement), enemyDef: fireEnemy(), seed })
+      runRound(b, { type: 'normalAttack' })
+      const ev = b.uiEvents.find((e) => e.type === 'damage' && e.source === 'enemy')
+      if (ev) return { ev, log: b.log.map((l) => l.text).join('|') }
+    }
+    return null
+  }
+  const neutral = enemyHit(null), weak = enemyHit(weakToFire), resist = enemyHit(resistsFire)
+  check('敵の攻撃は本体の属性（火の敵なら火の攻撃）', neutral.ev.element === 'fire' && weak.ev.element === 'fire')
+  check('こちらが無属性なら相性は等倍', neutral.ev.elemMult === 1)
+  check('こちらの属性が弱点なら敵の攻撃が痛くなる', weak.ev.elemMult > 1 && weak.log.includes('弱点！'))
+  check('こちらの属性が耐性なら敵の攻撃が軽くなる', resist.ev.elemMult < 1 && resist.log.includes('耐性…'))
+
+  // 平均ダメージでも確かめる（弱点 > 等倍 > 耐性）
+  const avgEnemyDmg = (weaponElement) => {
+    let total = 0, n = 0
+    for (let seed = 1; seed <= 200; seed++) {
+      const b = createBattle({ jobId: 'swordsman', weapon: sword(weaponElement), enemyDef: fireEnemy(), seed })
+      runRound(b, { type: 'normalAttack' })
+      for (const e of b.uiEvents) if (e.type === 'damage' && e.source === 'enemy') { total += e.amount; n++ }
+    }
+    return total / n
+  }
+  const dW = avgEnemyDmg(weakToFire), dN = avgEnemyDmg(null), dR = avgEnemyDmg(resistsFire)
+  check('敵から受ける平均ダメージ：弱点 > 等倍 > 耐性', dW > dN && dN > dR, `(${dW.toFixed(1)} / ${dN.toFixed(1)} / ${dR.toFixed(1)})`)
+
+  // プレイヤーの通常攻撃は無属性のまま
+  const pb = createBattle({ jobId: 'swordsman', weapon: sword(weakToFire), enemyDef: fireEnemy(), seed: 3 })
+  runRound(pb, { type: 'normalAttack' })
+  const pEv = pb.uiEvents.find((e) => e.type === 'damage' && e.source === 'player')
+  check('プレイヤーの通常攻撃は無属性のまま', !pEv || (pEv.element === null && pEv.elemMult === 1))
+
+  // 仲間の攻撃も本体の属性
+  const waterMon = { id: 'm', name: 'ミズタマ', element: 'water', floor: 6, isBoss: false, sprite: 'puddleEye', stats: { hp: 80, atk: 9, def: 7, spd: 30 }, level: 1, exp: 0 }
+  let allyEv = null
+  for (let seed = 1; seed < 40 && !allyEv; seed++) {
+    const ab = createBattle({ jobId: 'swordsman', weapon: sword(null), enemyDef: fireEnemy(), seed, ally: buildAllyForBattle(waterMon) })
+    runRound(ab, { type: 'normalAttack' })
+    allyEv = ab.uiEvents.find((e) => e.type === 'damage' && e.source === 'ally')
+  }
+  check('仲間の攻撃は本体の属性（水の仲間なら水の攻撃）で、相性が乗る',
+    allyEv.element === 'water' && allyEv.elemMult === getElementMultiplier('water', 'fire'))
+
+  // 攻撃演出の出し分け
+  check('演出：剣の通常攻撃は斬撃', resolveEffectKind({ source: 'player', weaponType: 'sword' }) === 'slash')
+  check('演出：属性スキルはその属性', resolveEffectKind({ source: 'player', weaponType: 'sword', skillElement: 'thunder' }) === 'thunder')
+  check('演出：仲間の攻撃は本体の属性', resolveEffectKind({ source: 'ally', element: 'water' }) === 'water')
+  check('演出：属性のない仲間は爪', resolveEffectKind({ source: 'ally', element: null }) === 'claw')
+  check('演出：知らない武器種は汎用の打撃', resolveEffectKind({ source: 'player', weaponType: 'spear' }) === 'impact')
+  check('演出：全種類のコマが作れて、マスの範囲に収まる',
+    Object.keys(EFFECTS).every((k) => { const f = getEffectFrames(k); return f.length >= 5 && f.some((fr) => fr.length > 0) && f.every((fr) => fr.every((px) => px.x >= 0 && px.y >= 0 && px.x < FX_GRID && px.y < FX_GRID)) }))
 }
 
 // ============================================================

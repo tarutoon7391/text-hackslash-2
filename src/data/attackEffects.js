@@ -171,7 +171,7 @@ export const EFFECTS = {
     }
     return toFrames(frames)
   },
-  // 仲間モンスター：3本の爪あと
+  // 属性を持たない仲間モンスター：3本の爪あと
   claw() {
     const frames = []
     for (let f = 0; f < 6; f++) {
@@ -333,11 +333,12 @@ const WEAPON_EFFECT = {
 
 // どの演出を出すか決める
 // source：誰の攻撃か（'player' | 'ally'）／skillElement：属性スキルならその属性／weaponType：プレイヤーの武器種
-// - 仲間モンスターの攻撃 → 爪
+// - 仲間モンスターの攻撃 → 本体の属性の演出（属性を持たない仲間だけ爪）
 // - 属性スキル（火・水・雷・土・光・闇）→ その属性の演出
 // - それ以外（通常攻撃・無属性スキル）→ 武器種の演出
-export function resolveEffectKind({ source, skillElement = null, weaponType = null }) {
-  if (source === 'ally') return 'claw'
+// element：その攻撃の属性（仲間モンスターの攻撃は本体の属性になる）
+export function resolveEffectKind({ source, skillElement = null, weaponType = null, element = null }) {
+  if (source === 'ally') return element && EFFECTS[element] ? element : 'claw'
   if (skillElement && EFFECTS[skillElement]) return skillElement
   return WEAPON_EFFECT[weaponType] || 'impact'
 }

@@ -176,7 +176,7 @@ export default function BattleScreen({ battle, setBattle, onExit, onOpenDictiona
         uiEvents
           .filter((ev) => ev.target === 'enemy' && ev.type === 'damage')
           .map((ev) => ({
-            kind: resolveEffectKind({ source: ev.source, skillElement: ev.skillElement, weaponType: battle.player.weapon?.weaponType }),
+            kind: resolveEffectKind({ source: ev.source, skillElement: ev.skillElement, element: ev.element, weaponType: battle.player.weapon?.weaponType }),
             // 演出の色：属性つきの攻撃はその属性の色、無属性は刃の色（銀）
             color: ev.element ? ELEMENT_COLORS[ev.element] : '#e8ecf4',
           }))

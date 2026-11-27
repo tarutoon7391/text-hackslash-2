@@ -557,7 +557,13 @@ function executeNormalAttack(battle, attacker, defender) {
   // 会心ダメージ+%（エンチャント）は会心倍率に乗算
   const critMult = isCrit ? BATTLE_CONFIG.critMultiplier * (1 + (attacker.stats.critDamagePct || 0) / 100) : 1
 
-  // DEF軽減・被ダメ軽減（属性相性・一致ボーナスは通常攻撃には乗らない）
+  // 攻撃の属性：
+  //   モンスター（敵・仲間）の攻撃は、必ず本体の属性の攻撃になる（属性相性が乗る）
+  //   プレイヤーの通常攻撃は無属性のまま（相性計算なし）
+  const attackElement = attacker.id === 'player' ? null : (attacker.element || null)
+  const elemMult = attackElement ? getElementMultiplier(attackElement, defender.element) : 1
+
+  // DEF軽減・被ダメ軽減
   const mitigation = BATTLE_CONFIG.defenseFactor / (BATTLE_CONFIG.defenseFactor + getEffStat(defender, 'def'))
   const cut = clamp(getEffStat(defender, 'damageCut'), -100, 90)
 
@@ -570,13 +576,13 @@ function executeNormalAttack(battle, attacker, defender) {
 
   const variance = 1 + (battle.rng() * 2 - 1) * BATTLE_CONFIG.damageVariance
   const dmg = Math.max(1, Math.round(
-    getEffStat(attacker, 'atk') * cfg.power * critMult * mitigation * (1 - cut / 100) * freezeMult * variance
+    getEffStat(attacker, 'atk') * cfg.power * elemMult * critMult * mitigation * (1 - cut / 100) * freezeMult * variance
   ))
   applyDamage(battle, defender, dmg)
   defender.lastHitTurn = battle.turn
-  addLog(battle, `　${isCrit ? '💥会心！ ' : ''}${defender.name} に ${dmg} ダメージ`, isCrit ? 'crit' : 'damage')
-  // 通常攻撃は無属性（相性計算なし）
-  pushEvent(battle, { type: 'damage', target: defender.id, amount: dmg, crit: isCrit, element: null, elemMult: 1, source: attacker.id, skillElement: null })
+  const elemText = elemMult > 1 ? '⚔️弱点！ ' : elemMult < 1 ? '🛡️耐性… ' : ''
+  addLog(battle, `　${isCrit ? '💥会心！ ' : ''}${elemText}${defender.name} に ${dmg} ダメージ`, isCrit ? 'crit' : 'damage')
+  pushEvent(battle, { type: 'damage', target: defender.id, amount: dmg, crit: isCrit, element: attackElement, elemMult, source: attacker.id, skillElement: null })
 
   // 凍結は被弾で解除
   if (frozen) {
