@@ -20,7 +20,7 @@ import { useDungeonState, isBossFloor } from './systems/dungeonState.js'
 import { useInventoryState } from './systems/inventoryState.js'
 import { useEquipmentState } from './systems/equipmentState.js'
 import { useProgressState, enemyExpFor } from './systems/progressState.js'
-import { useMonsterState, createMonsterFromEnemy } from './systems/monsterState.js'
+import { useMonsterState, createMonsterFromEnemy, buildAllyForBattle, calcMonsterStats } from './systems/monsterState.js'
 import { usePersistentState } from './systems/saveStorage.js'
 import { buildPlayerStats } from './systems/playerStats.js'
 import { generateEnemy } from './systems/enemyGenerator.js'
@@ -38,6 +38,8 @@ export default function App() {
   // 探索中の残りHP（階をまたいで持ち越す）。null＝満タン（ロビーから出発した直後）
   // ロビーに戻ると全回復する。MPは今まで通り戦闘ごとに全回復
   const [runHp, setRunHp] = useState(null)
+  // 探索中の仲間の残りHP（持ち越し）。null＝満タン、0＝倒れている（ロビーに戻るまで戦闘に出ない）
+  const [runAllyHp, setRunAllyHp] = useState(null)
   const [showDictionary, setShowDictionary] = useState(false)
   const dungeon = useDungeonState()
   const inventory = useInventoryState()
@@ -66,6 +68,7 @@ export default function App() {
   // ロビーから出発（武器は装備スロットのものをSetupScreen経由で受け取る）
   const depart = ({ startFloor }) => {
     setRunHp(null) // ロビーから出発する時は満タン
+    setRunAllyHp(null)
     dungeon.enterDungeon(startFloor)
     setScreen('dungeon')
   }
@@ -77,7 +80,10 @@ export default function App() {
     // （探索中にレベルが上がれば、次の戦闘からすぐ反映される）
     const weapon = itemsById[equipment.slots.weapon]
     const playerStats = buildPlayerStats({ jobId, level: jobLevel, slots: equipment.slots, itemsById })
-    setBattle(createBattle({ jobId, weapon, enemyDef, playerStats, startHp: runHp }))
+    // 連れていく仲間がいて、倒れていなければ一緒に戦う
+    const partner = monsterBox.partyMonster
+    const ally = partner && runAllyHp !== 0 ? buildAllyForBattle(partner, runAllyHp) : null
+    setBattle(createBattle({ jobId, weapon, enemyDef, playerStats, startHp: runHp, ally }))
     setScreen('battle')
   }
 
@@ -87,6 +93,9 @@ export default function App() {
     const floor = dungeon.currentFloor
     const hpLeft = battle?.player.stats.hp ?? null
     const recruitedEnemy = result === 'recruit' ? battle.enemy : null
+    // 仲間が戦闘に出ていたら残りHPを持ち越す（倒れていたら0）
+    const allyHpLeft = battle?.ally ? battle.ally.stats.hp : runAllyHp
+    const partner = monsterBox.partyMonster
     setBattle(null)
     if (result === 'recruit' && floor != null) {
       // 勧誘成功：敵は倒していないのでドロップは無し。仲間に加わり、経験値は入る。階は突破扱いで先へ進める
@@ -94,8 +103,13 @@ export default function App() {
       monsterBox.addMonster(monster)
       const exp = enemyExpFor({ floor, boss: false })
       const { before, after } = progress.gainExp(jobId, exp)
+      const allyGain = partner ? monsterBox.gainExp(partner.id, exp) : null
       setRunHp(hpLeft)
-      setLastResult({ floor, item: null, shards: null, recruited: monster, exp, levelBefore: before.level, levelAfter: after.level })
+      setRunAllyHp(allyHpLeft)
+      setLastResult({
+        floor, item: null, shards: null, recruited: monster, exp, levelBefore: before.level, levelAfter: after.level,
+        ally: allyGain && { name: partner.name, levelBefore: allyGain.before.level, levelAfter: allyGain.after.level },
+      })
       setScreen('loot')
     } else if (result === 'win' && floor != null) {
       const boss = isBossFloor(floor)
@@ -109,8 +123,14 @@ export default function App() {
       // ボス撃破で次ブロックの先頭階（次のチェックポイント）を解放
       if (boss) dungeon.unlockCheckpoint(floor + 1)
       // 残りHPを次の階へ持ち越す（レベルアップしても回復はしない。最大HPが増えた分だけ余裕ができる）
+      // 連れている仲間にも同じだけ経験値が入る（その戦闘で倒れていても入る）
+      const allyGain = partner ? monsterBox.gainExp(partner.id, exp) : null
       setRunHp(hpLeft)
-      setLastResult({ floor, item, shards, exp, levelBefore: before.level, levelAfter: after.level })
+      setRunAllyHp(allyHpLeft)
+      setLastResult({
+        floor, item, shards, exp, levelBefore: before.level, levelAfter: after.level,
+        ally: allyGain && { name: partner.name, levelBefore: allyGain.before.level, levelAfter: allyGain.after.level },
+      })
       setScreen('loot')
     } else {
       // 敗北・逃走時は常にロビーへ（特定階への自動帰還はしない）
@@ -130,6 +150,14 @@ export default function App() {
     dungeon.leaveDungeon()
     setScreen('lobby')
   }
+
+  // 連れている仲間の探索中の状態（ダンジョン画面・リザルトのHP表示用）。連れていなければnull
+  const allyStatus = monsterBox.partyMonster
+    ? (() => {
+        const maxHp = calcMonsterStats(monsterBox.partyMonster).hp
+        return { name: monsterBox.partyMonster.name, hp: runAllyHp == null ? maxHp : Math.min(runAllyHp, maxHp), maxHp }
+      })()
+    : null
 
   // フッターナビからの画面切り替え（フッターは拠点でしか出ないが、念のため探索中なら探索終了扱いにする）
   const navigate = (tab) => {
@@ -159,6 +187,8 @@ export default function App() {
             equipment={equipment}
             jobId={jobId}
             jobLevels={progress.jobLevels}
+            partyMonster={monsterBox.partyMonster}
+            onOpenMonsters={() => setScreen('monsters')}
             onSelectJob={selectJob}
             onOpenEquipment={() => setScreen('equipment')}
           />
@@ -180,6 +210,8 @@ export default function App() {
         {screen === 'monsters' && (
           <MonsterScreen
             monsters={monsterBox.monsters}
+            partyId={monsterBox.partyId}
+            onToggleParty={monsterBox.toggleParty}
             onRelease={monsterBox.releaseMonster}
             onBack={() => setScreen('lobby')}
           />
@@ -189,6 +221,7 @@ export default function App() {
             floor={dungeon.currentFloor}
             hp={runHp ?? currentMaxHp}
             maxHp={currentMaxHp}
+            ally={allyStatus}
             onAdvance={advance}
             onReturnLobby={toLobby}
           />
@@ -197,6 +230,7 @@ export default function App() {
           <BattleScreen
             battle={battle}
             setBattle={setBattle}
+            monsterBoxFull={monsterBox.isFull}
             onExit={exitBattle}
             onOpenDictionary={() => setShowDictionary(true)}
           />
@@ -206,6 +240,7 @@ export default function App() {
             result={lastResult}
             hp={runHp ?? currentMaxHp}
             maxHp={currentMaxHp}
+            allyStatus={allyStatus}
             jobName={JOBS[jobId].name}
             onNext={nextFloor}
             onLobby={toLobby}

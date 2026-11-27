@@ -152,15 +152,20 @@ try {
   console.log('\n====== 4. 仲間モンスター ======')
   const { default: MonsterScreen } = await server.ssrLoadModule('/src/pages/MonsterScreen.jsx')
   const { default: ActionMenu } = await server.ssrLoadModule('/src/components/battle/ActionMenu.jsx')
-  const mon = { id: 'm1', name: '火の魔獣', element: 'fire', floor: 3, isBoss: false, sprite: null, stats: { hp: 73, atk: 8, def: 7, spd: 10 }, recruitedAt: 1 }
-  const monHtml = render(React.createElement(MonsterScreen, { monsters: [mon], onRelease: () => {}, onBack: () => {} }))
-  check('仲間一覧が描画できる', monHtml.includes('仲間モンスター（1）') && monHtml.includes('火の魔獣') && monHtml.includes('3階で仲間に') && monHtml.includes('HP73'))
+  const mon = { id: 'm1', name: '火の魔獣', element: 'fire', floor: 3, isBoss: false, sprite: null, stats: { hp: 73, atk: 8, def: 7, spd: 10 }, level: 1, exp: 0, recruitedAt: 1 }
+  const monHtml = render(React.createElement(MonsterScreen, { monsters: [mon], partyId: 'm1', onToggleParty: () => {}, onRelease: () => {}, onBack: () => {} }))
+  check('連れていく仲間に「同行中」と出る', monHtml.includes('同行中') && monHtml.includes('外す') && monHtml.includes('Lv1'))
+  const fullHtml = render(React.createElement(MonsterScreen, { monsters: Array.from({ length: 10 }, (_, i) => ({ ...mon, id: `m${i}` })), partyId: null, onToggleParty: () => {}, onRelease: () => {}, onBack: () => {} }))
+  check('10体で満員の案内が出る', fullHtml.includes('仲間モンスター（10/10）') && fullHtml.includes('仲間が満員'))
+  check('仲間一覧が描画できる', monHtml.includes('仲間モンスター（1/10）') && monHtml.includes('火の魔獣') && monHtml.includes('3階で仲間に') && monHtml.includes('HP73'))
   check('仲間ゼロでも描画できる',
     render(React.createElement(MonsterScreen, { monsters: [], onRelease: () => {}, onBack: () => {} })).includes('まだ仲間がいない'))
   const menuHtml = render(React.createElement(ActionMenu, { disabled: false, recruitChance: 0.326, onAttack() {}, onSkills() {}, onRecruit() {}, onEscape() {} }))
   check('仲間にするボタンに成功率が出る', menuHtml.includes('成功率33%'))
   const bossMenu = render(React.createElement(ActionMenu, { disabled: false, recruitChance: 0, onAttack() {}, onSkills() {}, onRecruit() {}, onEscape() {} }))
   check('勧誘できない相手ではボタンが押せない', bossMenu.includes('不可'))
+  const fullMenu = render(React.createElement(ActionMenu, { disabled: false, recruitChance: 0.5, boxFull: true, onAttack() {}, onSkills() {}, onRecruit() {}, onEscape() {} }))
+  check('仲間が満員だと勧誘ボタンが押せない', fullMenu.includes('仲間が満員') && !fullMenu.includes('成功率'))
   const recruitedResult = render(React.createElement(LootResultScreen, {
     result: { floor: 3, item: null, shards: null, recruited: mon, exp: 17, levelBefore: 1, levelAfter: 1 },
     jobName: '剣士', hp: 50, maxHp: 104, onNext: () => {}, onLobby: () => {}, onOpenDictionary: () => {},

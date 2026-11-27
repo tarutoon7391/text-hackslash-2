@@ -72,7 +72,7 @@ function EffectIcons({ combatant, onAilmentTap }) {
   return <div className="effect-row">{items}</div>
 }
 
-export default function BattleScreen({ battle, setBattle, onExit, onOpenDictionary }) {
+export default function BattleScreen({ battle, setBattle, onExit, onOpenDictionary, monsterBoxFull = false }) {
   const [showLog, setShowLog] = useState(false)
   const [uiMode, setUiMode] = useState('menu')          // 'menu' | 'skillList'
   const [selectedSkillId, setSelectedSkillId] = useState(null) // 白枠選択中のスキル
@@ -100,6 +100,7 @@ export default function BattleScreen({ battle, setBattle, onExit, onOpenDictiona
 
   const p = battle.player
   const e = battle.enemy
+  const a = battle.ally || null // 一緒に戦う仲間（いなければnull）
   // ダンジョンの生成敵はENEMIESに存在しないため、battle側が保持する定義を優先する
   const enemyDef = e.enemyDef || ENEMIES[e.enemyId]
   const actions = getActionList(battle)
@@ -372,6 +373,24 @@ export default function BattleScreen({ battle, setBattle, onExit, onOpenDictiona
         </StatusEffectShake>
       </div>
 
+      {/* 一緒に戦う仲間（自動で攻撃する。倒れても戦闘は続く） */}
+      {a && (
+        <div className={`ally-panel panel ${activeActor === 'ally' ? 'acting' : ''} ${a.stats.hp <= 0 ? 'down' : ''}`}>
+          <div className="ally-sprite">
+            <PixelSprite enemyDef={{ isBoss: a.allyDef.isBoss, sprite: a.allyDef.sprite }} element={a.element} size={36} />
+          </div>
+          <div className="ally-info">
+            <div className="player-name">
+              {a.name}
+              <span className="elem-chip">{getElementDef(a.element).icon}{getElementDef(a.element).name}</span>
+              {a.stats.hp <= 0 && <span className="turn-label">戦闘不能</span>}
+            </div>
+            <Bar label="HP" value={a.stats.hp} max={a.stats.maxHp} color="#4caf7d" />
+            <EffectIcons combatant={a} onAilmentTap={onAilmentTap} />
+          </div>
+        </div>
+      )}
+
       {/* 追加ターン表示 */}
       {extraTurn && !busy && <div className="extra-banner">⚡ 追加ターン！</div>}
 
@@ -412,6 +431,7 @@ export default function BattleScreen({ battle, setBattle, onExit, onOpenDictiona
           <ActionMenu
             disabled={busy || Boolean(targeting)}
             recruitChance={getRecruitChance(battle)}
+            boxFull={monsterBoxFull}
             onAttack={() => { resetSelection(); startTargeting('attack') }}
             onSkills={() => { setUiMode(uiMode === 'skillList' ? 'menu' : 'skillList'); setSelectedSkillId(null) }}
             onRecruit={() => { resetSelection(); startTargeting('recruit') }}

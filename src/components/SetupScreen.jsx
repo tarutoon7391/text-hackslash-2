@@ -10,9 +10,10 @@ import { RARITIES } from '../data/rarities.js'
 import { EQUIP_SLOTS } from '../systems/equipmentState.js'
 import { buildPlayerStats } from '../systems/playerStats.js'
 import { expToNextLevel } from '../systems/progressState.js'
+import PixelSprite from './battle/PixelSprite.jsx'
 import CheckpointSelector from './dungeon/CheckpointSelector.jsx'
 
-export default function SetupScreen({ onDepart, checkpoints, items, equipment, jobId, jobLevels = {}, onSelectJob, onOpenEquipment }) {
+export default function SetupScreen({ onDepart, checkpoints, items, equipment, jobId, jobLevels = {}, partyMonster = null, onOpenMonsters, onSelectJob, onOpenEquipment }) {
   const [startFloor, setStartFloor] = useState(checkpoints[checkpoints.length - 1]) // 既定は最深チェックポイント
 
   const job = JOBS[jobId]
@@ -81,6 +82,26 @@ export default function SetupScreen({ onDepart, checkpoints, items, equipment, j
         })}
       </div>
       <div className="equip-hint">タップで装備画面へ。付け替え・合成はそこから行う</div>
+
+      <h2 className="section-label">連れていく仲間</h2>
+      <button className="party-row" onClick={onOpenMonsters}>
+        {partyMonster ? (
+          <>
+            <PixelSprite enemyDef={{ isBoss: partyMonster.isBoss, sprite: partyMonster.sprite }} element={partyMonster.element} size={36} />
+            <span>
+              {partyMonster.name} Lv{partyMonster.level}
+              <br />
+              <span className="party-sub">戦闘で一緒に戦う（自動で攻撃）。タップで変更</span>
+            </span>
+          </>
+        ) : (
+          <span>
+            🤝 なし
+            <br />
+            <span className="party-sub">タップで仲間の一覧へ。1体まで連れていける</span>
+          </span>
+        )}
+      </button>
 
       <h2 className="section-label">出発チェックポイント</h2>
       <CheckpointSelector checkpoints={checkpoints} selected={startFloor} onSelect={setStartFloor} />

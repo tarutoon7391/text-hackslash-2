@@ -24,7 +24,9 @@ import { applyJobExp, expToNextLevel, enemyExpFor, shardTierForFloor } from '../
 import { migrateItems } from '../src/systems/inventoryState.js'
 import { createBattle, beginRound, stepBattle, getRecruitChance } from '../src/systems/battleEngine.js'
 import { generateEnemy } from '../src/systems/enemyGenerator.js'
-import { createMonsterFromEnemy, migrateMonsters } from '../src/systems/monsterState.js'
+import {
+  createMonsterFromEnemy, migrateMonsters, calcMonsterStats, buildAllyForBattle, applyMonsterExp, MONSTER_BOX_MAX,
+} from '../src/systems/monsterState.js'
 import { ENEMY_SPECIES_BY_BLOCK, SPECIES_SPRITES, getSpeciesForFloor } from '../src/data/enemySpecies.js'
 import { ENEMY_SPRITES, resolveSpriteKey } from '../src/data/enemySprites.js'
 import { DUNGEON_CONFIG } from '../src/data/dungeonConfig.js'
@@ -516,6 +518,75 @@ console.log('\n【11】敵の種族')
   check('26階以降は汎用の敵にフォールバックする',
     getSpeciesForFloor(26) === null && beyond.speciesId === null && beyond.name.includes('魔獣') && resolveSpriteKey(beyond) === 'beast')
   check('種族が付いてもステータスは階層で決まる（1階と2階で伸びる）', all[1].stats.hp > all[0].stats.hp)
+}
+
+// ============================================================
+// 12. 仲間と一緒に戦う
+// ============================================================
+console.log('\n【12】仲間と一緒に戦う')
+{
+  const weapon = { id: 'w', slot: 'weapon', weaponType: 'sword', element: null, atk: 10, skills: [], enchants: [] }
+  const monster = { id: 'm', name: 'ヒノコ', element: 'fire', floor: 1, isBoss: false, sprite: 'ember', stats: { hp: 64, atk: 7, def: 6, spd: 9 }, level: 1, exp: 0 }
+  const runRound = (b, action) => { const order = []; beginRound(b, action); let g = 0; while (b.phase === 'acting' && g++ < 50) { const r = stepBattle(b); if (r.actorId) order.push(r.actorId) } return order }
+  const mk = (seed, opts = {}) => createBattle({ jobId: 'swordsman', weapon, enemyDef: generateEnemy({ floor: opts.floor || 1 }), seed, ally: opts.noAlly ? null : buildAllyForBattle(opts.monster || monster, opts.startHp ?? null) })
+
+  check('仲間の上限は10体', MONSTER_BOX_MAX === 10 && PROGRESSION_CONFIG.monster.partySize === 1)
+  const lv5 = calcMonsterStats({ ...monster, level: 5 })
+  check('仲間はレベルで強くなる', lv5.hp > 64 && lv5.atk > 7 && calcMonsterStats(monster).hp === 64)
+  const grown = applyMonsterExp(monster, expToNextLevel(1) + 2)
+  check('仲間に経験値が入りレベルが上がる', grown.level === 2 && grown.exp === 2 && monster.level === 1)
+  check('旧セーブの仲間にレベルが補われる', migrateMonsters([{ id: 'x', name: '古い' }])[0].level === 1)
+
+  const b = mk(5)
+  check('仲間が戦闘に参加する（HP満タン）', b.ally && b.ally.stats.hp === 64 && b.ally.stats.maxHp === 64 && b.ally.name === '仲間のヒノコ')
+  check('持ち越しHPで参加できる', mk(5, { startHp: 20 }).ally.stats.hp === 20)
+  check('仲間なしの戦闘は今まで通り', mk(5, { noAlly: true }).ally === undefined)
+
+  const enemyHp0 = b.enemy.stats.hp
+  const order = runRound(b, { type: 'normalAttack' })
+  check('1ラウンドに プレイヤー・仲間・敵 が1回ずつ行動する', order.slice().sort().join(',') === 'ally,enemy,player', `(実際: ${order.join(',')})`)
+  check('仲間が自動で攻撃する', b.log.some((l) => l.text.startsWith('仲間のヒノコ の')) && b.enemy.stats.hp < enemyHp0)
+
+  // 敵の狙い：仲間とプレイヤーの両方が狙われる（割合は設定値あたり）
+  let hitAlly = 0, hitPlayer = 0
+  for (let seed = 1; seed <= 400; seed++) {
+    const t = mk(seed * 7)
+    const before = { p: t.player.stats.hp, a: t.ally.stats.hp }
+    runRound(t, { type: 'normalAttack' })
+    if (t.ally.stats.hp < before.a) hitAlly++
+    if (t.player.stats.hp < before.p) hitPlayer++
+  }
+  const rate = hitAlly / (hitAlly + hitPlayer)
+  check('敵は仲間も狙う（約4割）', Math.abs(rate - PROGRESSION_CONFIG.monster.enemyTargetsAllyRate) < 0.08, `(実際: ${(rate * 100).toFixed(1)}%)`)
+
+  // 仲間が倒れても戦闘は続く／プレイヤーが倒れたら敗北
+  const weak = mk(3, { startHp: 1, floor: 5 })
+  let guard = 0
+  while (weak.ally.stats.hp > 0 && !weak.result && guard++ < 60) runRound(weak, { type: 'normalAttack' })
+  check('仲間が倒れても戦闘は続く', weak.ally.stats.hp === 0 && weak.result !== 'lose' && weak.log.some((l) => l.text.includes('仲間のヒノコ は倒れてしまった')))
+  const after = runRound(weak, { type: 'normalAttack' })
+  check('倒れた仲間は行動しない', !after.includes('ally'))
+  check('仲間が倒れた後、敵は必ずプレイヤーを狙う', weak.ally.stats.hp === 0)
+  const lose = mk(9, { floor: 25, monster: { ...monster, stats: { hp: 99999, atk: 1, def: 6, spd: 9 } } })
+  lose.player.stats.hp = 1
+  guard = 0
+  while (!lose.result && guard++ < 200) runRound(lose, { type: 'normalAttack' })
+  check('プレイヤーが倒れたら、仲間が生きていても敗北', lose.result === 'lose' && lose.ally.stats.hp > 0)
+
+  // 仲間がいると勝ちやすくなる（同じ条件で5階ボスに100戦）
+  const winRate = (withAlly) => {
+    let wins = 0
+    for (let seed = 1; seed <= 100; seed++) {
+      const t = mk(seed * 31, { floor: 5, noAlly: !withAlly, monster: { ...monster, level: 4 } })
+      let g = 0
+      while (!t.result && g++ < 200) runRound(t, { type: 'normalAttack' })
+      if (t.result === 'win') wins++
+    }
+    return wins
+  }
+  const solo = winRate(false), duo = winRate(true)
+  check('仲間がいるほうが勝率が高い', duo > solo, `(ソロ${solo}% → 仲間あり${duo}%)`)
+  console.log(`    参考：5階ボス（初期Lv1・武器ATK10・通常攻撃のみ）勝率 ソロ${solo}% → 仲間ヒノコLv4あり${duo}%`)
 }
 
 // ============================================================

@@ -94,7 +94,10 @@ function getPlusPowerMult(plus) {
 //   渡すとそれをそのまま使う（防具・アクセ・エンチャント・+値・職業レベルが戦闘に反映される）。
 //   省略時は従来通り「職業Lv1の基礎値＋武器ATK×武器種補正」だけで作る（スモークテスト用）
 // startHp：戦闘開始時のHP（探索中の持ち越し用）。省略時は最大HPで始まる
-export function createBattle({ jobId, weapon, enemyId, enemyDef = null, seed = null, playerStats: givenStats = null, startHp = null }) {
+// ally：一緒に戦う仲間モンスター（省略可）。{name, element, sprite, isBoss, stats:{hp,atk,def,spd,crit}, startHp}
+//   仲間は毎ターン自動で通常攻撃する。敵は単体攻撃のたびにプレイヤーか仲間のどちらかを狙う。
+//   仲間が倒れても戦闘は続く（プレイヤーが倒れたら敗北）
+export function createBattle({ jobId, weapon, enemyId, enemyDef = null, seed = null, playerStats: givenStats = null, startHp = null, ally = null }) {
   const rng = seed != null ? createSeededRng(seed) : Math.random
   const job = JOBS[jobId]
   const jobStats = calcJobStats(jobId)
@@ -188,6 +191,36 @@ export function createBattle({ jobId, weapon, enemyId, enemyDef = null, seed = n
     },
   }
 
+  if (ally) {
+    const allyMaxHp = ally.stats.hp
+    battle.ally = {
+      id: 'ally',
+      // 敵と同じ種族を連れていることがあるので、ログで見分けがつくよう「仲間の」を付ける
+      name: `仲間の${ally.name}`,
+      allyDef: ally, // UI表示用（ドット絵など）
+      element: ally.element || null,
+      attackElement: ally.element || null,
+      stats: {
+        maxHp: allyMaxHp,
+        maxMp: 0,
+        hp: ally.startHp != null ? Math.max(1, Math.min(allyMaxHp, Math.round(ally.startHp))) : allyMaxHp,
+        mp: 0,
+        atk: ally.stats.atk,
+        def: ally.stats.def,
+        spd: ally.stats.spd,
+        crit: ally.stats.crit ?? 0,
+      },
+      skills: [],
+      ailments: [],
+      mods: [],
+      flags: makeFlags(),
+      ailmentResists: {},
+      lastHitTurn: -10,
+      actedThisTurn: false,
+      extraActionsThisRound: 0,
+    }
+  }
+
   addLog(battle, `${def.icon} ${def.name} が現れた！`, 'system')
   return battle
 }
@@ -205,8 +238,26 @@ function pushEvent(battle, event) {
   if (battle.uiEvents) battle.uiEvents.push(event)
 }
 
+// 行動の相手：プレイヤーと仲間の相手は敵。敵の相手は、その行動の最初に決めた標的（プレイヤーか仲間）
 function opponentOf(battle, combatant) {
-  return combatant.id === 'player' ? battle.enemy : battle.player
+  if (combatant.id !== 'enemy') return battle.enemy
+  return battle._enemyTarget || battle.player
+}
+
+// 仲間が戦闘に参加していて、まだ倒れていないか
+function allyAlive(battle) {
+  return Boolean(battle.ally) && battle.ally.stats.hp > 0
+}
+
+// 戦闘に参加している全員（ターン終了処理などで回す用）
+function allCombatants(battle) {
+  return battle.ally ? [battle.player, battle.ally, battle.enemy] : [battle.player, battle.enemy]
+}
+
+// 敵が今回の行動で狙う相手を決める（仲間が生きていれば一定確率で仲間を狙う）
+function pickEnemyTarget(battle) {
+  if (!allyAlive(battle)) return battle.player
+  return battle.rng() < PROGRESSION_CONFIG.monster.enemyTargetsAllyRate ? battle.ally : battle.player
 }
 
 // ============================================================
@@ -286,8 +337,7 @@ export function beginRound(battle, action) {
     battle._queue.unshift({ actorId: 'player', action })
     return battle
   }
-  battle.player.extraActionsThisRound = 0
-  battle.enemy.extraActionsThisRound = 0
+  for (const c of allCombatants(battle)) c.extraActionsThisRound = 0
   const enemyAction = chooseEnemyAction(battle)
   battle._queue = buildTurnOrder(battle, action, enemyAction)
   battle.phase = 'acting'
@@ -347,11 +397,16 @@ function buildTurnOrder(battle, playerAction, enemyAction) {
     { actorId: 'player', action: playerAction, first: actionHasGuaranteedFirst(playerAction), spd: getEffStat(battle.player, 'spd') },
     { actorId: 'enemy', action: enemyAction, first: actionHasGuaranteedFirst(enemyAction), spd: getEffStat(battle.enemy, 'spd') },
   ]
-  // 確定先制 > SPD降順 > 同速はプレイヤー優先
+  // 仲間は毎ターン自動で通常攻撃する
+  if (allyAlive(battle)) {
+    entries.push({ actorId: 'ally', action: { type: 'basic' }, first: false, spd: getEffStat(battle.ally, 'spd') })
+  }
+  // 確定先制 > SPD降順 > 同速はプレイヤー→仲間→敵の順
+  const tieRank = { player: 0, ally: 1, enemy: 2 }
   entries.sort((a, b) => {
     if (a.first !== b.first) return a.first ? -1 : 1
     if (a.spd !== b.spd) return b.spd - a.spd
-    return a.actorId === 'player' ? -1 : 1
+    return tieRank[a.actorId] - tieRank[b.actorId]
   })
   return entries
 }
@@ -371,6 +426,8 @@ function handleExtraTurn(battle, actor) {
   addLog(battle, `⚡ ${actor.name} に追加ターン！`, 'system')
   if (actor.id === 'enemy') {
     battle._queue.unshift({ actorId: 'enemy', action: chooseEnemyAction(battle) })
+  } else if (actor.id === 'ally') {
+    battle._queue.unshift({ actorId: 'ally', action: { type: 'basic' } })
   } else {
     battle.phase = 'extraInput'
   }
@@ -395,6 +452,8 @@ function chooseEnemyAction(battle) {
 // ============================================================
 
 function performAction(battle, actor, action) {
+  // 敵は行動のたびに標的（プレイヤーか仲間）を決める。仲間がいない戦闘では乱数を消費しない
+  if (actor.id === 'enemy') battle._enemyTarget = pickEnemyTarget(battle)
   const target = opponentOf(battle, actor)
 
   // --- 状態異常による行動チェック（凍結→感電→混乱の順） ---
@@ -712,6 +771,11 @@ function executeRecruit(battle, actor) {
 
 function checkBattleEnd(battle) {
   if (battle.result) return
+  // 仲間が倒れた：戦闘は続く（ログは1回だけ）
+  if (battle.ally && battle.ally.stats.hp <= 0 && !battle.ally.downLogged) {
+    battle.ally.downLogged = true
+    addLog(battle, `💀 ${battle.ally.name} は倒れてしまった…`, 'system')
+  }
   if (battle.enemy.stats.hp <= 0) {
     battle.result = 'win'
     addLog(battle, `🎉 ${battle.enemy.name} を倒した！勝利！`, 'system')
@@ -938,10 +1002,13 @@ function resolveRecipients(battle, actor, target, targetSpec) {
   switch (targetSpec) {
     case 'enemy': return [opponentOf(battle, actor)]
     case 'self': return [actor]
-    case 'ally':
     case 'allies':
+      // 味方全体：プレイヤー側は「プレイヤー＋生きている仲間」。敵側は敵だけ
+      if (actor.id === 'enemy') return [actor]
+      return [battle.player, ...(allyAlive(battle) ? [battle.ally] : [])].filter((c) => c.stats.hp > 0)
+    case 'ally':
     default:
-      return [actor] // パーティ実装（フェーズ3以降）で複数対象に拡張
+      return [actor] // 味方単体は今は自分自身（対象選択は今後）
   }
 }
 
@@ -1131,7 +1198,7 @@ function applyAilment(battle, attacker, target, ailmentId, chanceTier, stacks, i
 // ============================================================
 
 function endRound(battle) {
-  for (const c of [battle.player, battle.enemy]) {
+  for (const c of allCombatants(battle)) {
     if (c.stats.hp <= 0) continue
 
     // 火傷：継続ダメージ

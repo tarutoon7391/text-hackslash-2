@@ -1333,3 +1333,26 @@ body::after {
 .monster-release-btn, .monster-release .quick-equip-btn { flex: 0 0 auto; padding: 0 10px; font-size: 11px; }
 .monster-release-btn { border-color: var(--line); color: var(--muted); }
 .quick-equip-btn.release-yes { border-color: var(--danger); color: var(--danger); }
+
+/* ===== 一緒に戦う仲間 ===== */
+.ally-panel { display: flex; align-items: center; gap: 8px; padding: 6px 10px; }
+.ally-panel.down { opacity: 0.45; }
+.ally-sprite { line-height: 0; flex-shrink: 0; }
+.ally-info { flex: 1; min-width: 0; }
+.ally-hp-label { margin-top: 6px; }
+.monster-actions { display: flex; flex-direction: column; gap: 4px; }
+.monster-actions .quick-equip-btn { flex: 0 0 auto; min-height: 36px; padding: 0 10px; font-size: 11px; }
+.monster-card.in-party { box-shadow: 0 0 10px #00ccff66; }
+.monster-level { color: var(--accent); font-size: 12px; }
+.party-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  text-align: left;
+  font-size: 13px;
+}
+.party-row .party-sub { color: var(--muted); font-size: 11px; }

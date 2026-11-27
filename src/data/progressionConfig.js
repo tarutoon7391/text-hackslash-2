@@ -38,6 +38,17 @@ export const PROGRESSION_CONFIG = {
     bossChance: 0,
   },
 
+  // ===== 仲間モンスター =====
+  monster: {
+    maxBox: 10,   // 持てる仲間の上限
+    partySize: 1, // 一緒に戦える仲間の数
+    // レベル1ごとのステータス成長率（仲間にした時の値に対する割合）。必要経験値は職業レベルと同じ式
+    growthPerLevel: { hp: 0.08, atk: 0.08, def: 0.06, spd: 0.02 },
+    crit: 5,      // 仲間の会心率（固定）
+    // 敵が単体攻撃をする時、（仲間が生きていれば）仲間のほうを狙う確率
+    enemyTargetsAllyRate: 0.4,
+  },
+
   // ===== 合成素材 =====
   material: {
     // 欠片：5階ブロックごとにランクが上がる。1個あたりの合成経験値 = shardExpBase × ランク

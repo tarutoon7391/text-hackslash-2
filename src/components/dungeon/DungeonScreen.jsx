@@ -6,7 +6,8 @@ import { floorToZoneElement, isBossFloor, floorInBlock } from '../../systems/dun
 import { DUNGEON_CONFIG } from '../../data/dungeonConfig.js'
 
 // hp／maxHp：探索中の残りHP（階をまたいで持ち越される。ロビーに戻ると全回復）
-export default function DungeonScreen({ floor, hp = null, maxHp = null, onAdvance, onReturnLobby }) {
+// ally：連れている仲間の状態 {name, hp, maxHp}（連れていなければnull）
+export default function DungeonScreen({ floor, hp = null, maxHp = null, ally = null, onAdvance, onReturnLobby }) {
   const zone = floorToZoneElement(floor)
   const boss = isBossFloor(floor)
   const elem = ELEMENTS[zone]
@@ -35,7 +36,18 @@ export default function DungeonScreen({ floor, hp = null, maxHp = null, onAdvanc
           <div className="bar-bg">
             <div className="bar-fill" style={{ width: `${Math.min(100, (hp / maxHp) * 100)}%`, background: hp / maxHp <= 0.3 ? '#e05555' : '#4caf7d' }} />
           </div>
-          <div className="run-hp-note">HPは次の階に持ち越される。ロビーに戻ると全回復</div>
+          {ally && (
+            <>
+              <div className="bar-label ally-hp-label">
+                <span>🤝 {ally.name}{ally.hp <= 0 ? '（戦闘不能）' : ''}</span>
+                <span>{ally.hp}/{ally.maxHp}</span>
+              </div>
+              <div className="bar-bg">
+                <div className="bar-fill" style={{ width: `${Math.min(100, (ally.hp / ally.maxHp) * 100)}%`, background: ally.hp / ally.maxHp <= 0.3 ? '#e05555' : '#4caf7d' }} />
+              </div>
+            </>
+          )}
+          <div className="run-hp-note">HPは次の階に持ち越される。ロビーに戻ると全回復{ally ? '（倒れた仲間もロビーで復活）' : ''}</div>
         </div>
       )}
 

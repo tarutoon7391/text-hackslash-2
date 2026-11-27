@@ -11,9 +11,10 @@ import PixelSprite from '../battle/PixelSprite.jsx'
 
 const SLOT_LABELS = { weapon: '武器', armor: '防具', accessory: 'アクセサリー' }
 
-export default function LootResultScreen({ result, jobName, hp = null, maxHp = null, onNext, onLobby, onOpenDictionary }) {
+export default function LootResultScreen({ result, jobName, hp = null, maxHp = null, allyStatus = null, onNext, onLobby, onOpenDictionary }) {
   // recruited：勧誘で仲間にしたモンスター（その場合は敵を倒していないのでドロップ＝item・shardsは無い）
-  const { floor, item, shards, exp, levelBefore, levelAfter, recruited = null } = result
+  // ally：連れている仲間の経験値結果 {name, levelBefore, levelAfter}（連れていなければnull）
+  const { floor, item, shards, exp, levelBefore, levelAfter, recruited = null, ally = null } = result
   const rarity = item ? RARITIES[item.rarity] : null
   const leveledUp = levelAfter > levelBefore
 
@@ -45,10 +46,25 @@ export default function LootResultScreen({ result, jobName, hp = null, maxHp = n
         {leveledUp && (
           <div className="loot-levelup">⬆ レベルアップ！ Lv{levelBefore} → Lv{levelAfter}</div>
         )}
+        {ally && (
+          <div className="loot-gain-row">
+            <span>🤝 {ally.name} 経験値</span>
+            <span className="loot-gain-value">+{exp}</span>
+          </div>
+        )}
+        {ally && ally.levelAfter > ally.levelBefore && (
+          <div className="loot-levelup">⬆ {ally.name} レベルアップ！ Lv{ally.levelBefore} → Lv{ally.levelAfter}</div>
+        )}
         {hp != null && maxHp != null && (
           <div className="loot-gain-row">
             <span>残りHP（次の階に持ち越し）</span>
             <span className={`loot-gain-value ${hp / maxHp <= 0.3 ? 'low' : ''}`}>{Math.min(hp, maxHp)}/{maxHp}</span>
+          </div>
+        )}
+        {allyStatus && (
+          <div className="loot-gain-row">
+            <span>{allyStatus.name} 残りHP{allyStatus.hp <= 0 ? '（戦闘不能）' : ''}</span>
+            <span className={`loot-gain-value ${allyStatus.hp / allyStatus.maxHp <= 0.3 ? 'low' : ''}`}>{allyStatus.hp}/{allyStatus.maxHp}</span>
           </div>
         )}
         {shards && (
