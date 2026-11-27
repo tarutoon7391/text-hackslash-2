@@ -1,5 +1,5 @@
 // 仲間モンスター一覧画面
-// 戦闘中の「仲間にする」で勧誘に成功したモンスターが並ぶ（最大10体）
+// 倒したあと起き上がって仲間になったモンスターが並ぶ（最大10体）
 // 1体だけ「連れていく」に選べて、その仲間は戦闘でプレイヤーと一緒に戦う（自動で通常攻撃）
 import { useState } from 'react'
 import { getElementDef, getElementLabel } from '../data/elements.js'
@@ -20,7 +20,7 @@ export default function MonsterScreen({ monsters, partyId = null, onToggleParty,
       </div>
       <div className="equip-body">
         <div className="equip-hint">
-          戦闘中の「仲間にする」で勧誘できる（ボスは不可）。持てるのは{MONSTER_BOX_MAX}体まで。
+          敵を倒すと、たまに起き上がって仲間になりたそうにしてくる（ボスは仲間にならない）。持てるのは{MONSTER_BOX_MAX}体まで。
           1体だけ連れていけて、戦闘で一緒に戦ってくれる（自動で攻撃）。連れていった仲間は経験値をもらって育つ
         </div>
         {full && <div className="depart-note">⚠️ 仲間が満員。これ以上仲間にするには、誰かと別れる必要がある</div>}

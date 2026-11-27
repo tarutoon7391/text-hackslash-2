@@ -166,18 +166,22 @@ try {
   check('仲間一覧が描画できる', monHtml.includes('仲間モンスター（1/10）') && monHtml.includes('火の魔獣') && monHtml.includes('3階で仲間に') && monHtml.includes('HP73'))
   check('仲間ゼロでも描画できる',
     render(React.createElement(MonsterScreen, { monsters: [], onRelease: () => {}, onBack: () => {} })).includes('まだ仲間がいない'))
-  const menuHtml = render(React.createElement(ActionMenu, { disabled: false, recruitChance: 0.326, onAttack() {}, onSkills() {}, onRecruit() {}, onEscape() {} }))
-  check('仲間にするボタンに成功率が出る', menuHtml.includes('成功率33%'))
-  const bossMenu = render(React.createElement(ActionMenu, { disabled: false, recruitChance: 0, onAttack() {}, onSkills() {}, onRecruit() {}, onEscape() {} }))
-  check('勧誘できない相手ではボタンが押せない', bossMenu.includes('不可'))
-  const fullMenu = render(React.createElement(ActionMenu, { disabled: false, recruitChance: 0.5, boxFull: true, onAttack() {}, onSkills() {}, onRecruit() {}, onEscape() {} }))
-  check('仲間が満員だと勧誘ボタンが押せない', fullMenu.includes('仲間が満員') && !fullMenu.includes('成功率'))
-  const recruitedResult = render(React.createElement(LootResultScreen, {
-    result: { floor: 3, item: null, shards: null, recruited: mon, exp: 17, levelBefore: 1, levelAfter: 1 },
-    jobName: '剣士', hp: 50, maxHp: 104, onNext: () => {}, onLobby: () => {}, onOpenDictionary: () => {},
+  const menuHtml = render(React.createElement(ActionMenu, { disabled: false, onAttack() {}, onSkills() {}, onEscape() {} }))
+  check('戦闘コマンドは3つ（仲間にするは無い）', (menuHtml.match(/<button/g) || []).length === 3 && !menuHtml.includes('仲間にする'))
+  const lootWith = (extra, props = {}) => render(React.createElement(LootResultScreen, {
+    result: { floor: 3, item: null, shards: { tier: 1, count: 2 }, exp: 17, levelBefore: 1, levelAfter: 1, ...extra },
+    jobName: '剣士', hp: 50, maxHp: 104, onNext: () => {}, onLobby: () => {}, onOpenDictionary: () => {}, ...props,
   }))
-  check('リザルト：仲間にした時の表示',
-    recruitedResult.includes('仲間になった！') && recruitedResult.includes('火の魔獣') && recruitedResult.includes('ドロップ（欠片・装備）は無い') && recruitedResult.includes('50/104'))
+  const offer = lootWith({ joinOffer: mon, joinState: 'offer' })
+  check('リザルト：起き上がった敵に「仲間にする／見送る」が出る',
+    offer.includes('仲間になりたそうにこちらを見ている') && offer.includes('火の魔獣') && offer.includes('>仲間にする<') && offer.includes('>見送る<') && offer.includes('勝利') && offer.includes('50/104'))
+  const offerFull = lootWith({ joinOffer: mon, joinState: 'offer' }, { boxFull: true })
+  check('リザルト：仲間が満員だと仲間にできない', offerFull.includes('仲間が満員で連れていけない') && /<button[^>]*disabled[^>]*>仲間にする</.test(offerFull))
+  const joined = lootWith({ joinOffer: mon, joinState: 'joined' })
+  check('リザルト：仲間にした後の表示', joined.includes('が仲間になった！') && !joined.includes('>見送る<'))
+  const declined = lootWith({ joinOffer: mon, joinState: 'declined' })
+  check('リザルト：見送った後の表示', declined.includes('去っていった') && !declined.includes('>仲間にする<'))
+  check('リザルト：起き上がらなければ何も出ない', !lootWith({}).includes('join-offer'))
 } finally {
   await server.close()
 }

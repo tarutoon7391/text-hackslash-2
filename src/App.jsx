@@ -20,7 +20,7 @@ import { useDungeonState, isBossFloor } from './systems/dungeonState.js'
 import { useInventoryState } from './systems/inventoryState.js'
 import { useEquipmentState } from './systems/equipmentState.js'
 import { useProgressState, enemyExpFor } from './systems/progressState.js'
-import { useMonsterState, createMonsterFromEnemy, buildAllyForBattle, calcMonsterStats } from './systems/monsterState.js'
+import { useMonsterState, createMonsterFromEnemy, rollJoin, buildAllyForBattle, calcMonsterStats } from './systems/monsterState.js'
 import { usePersistentState } from './systems/saveStorage.js'
 import { buildPlayerStats } from './systems/playerStats.js'
 import { generateEnemy } from './systems/enemyGenerator.js'
@@ -92,26 +92,12 @@ export default function App() {
     const result = battle?.result
     const floor = dungeon.currentFloor
     const hpLeft = battle?.player.stats.hp ?? null
-    const recruitedEnemy = result === 'recruit' ? battle.enemy : null
+    const defeatedEnemy = battle?.enemy
     // 仲間が戦闘に出ていたら残りHPを持ち越す（倒れていたら0）
     const allyHpLeft = battle?.ally ? battle.ally.stats.hp : runAllyHp
     const partner = monsterBox.partyMonster
     setBattle(null)
-    if (result === 'recruit' && floor != null) {
-      // 勧誘成功：敵は倒していないのでドロップは無し。仲間に加わり、経験値は入る。階は突破扱いで先へ進める
-      const monster = createMonsterFromEnemy(recruitedEnemy)
-      monsterBox.addMonster(monster)
-      const exp = enemyExpFor({ floor, boss: false })
-      const { before, after } = progress.gainExp(jobId, exp)
-      const allyGain = partner ? monsterBox.gainExp(partner.id, exp) : null
-      setRunHp(hpLeft)
-      setRunAllyHp(allyHpLeft)
-      setLastResult({
-        floor, item: null, shards: null, recruited: monster, exp, levelBefore: before.level, levelAfter: after.level,
-        ally: allyGain && { name: partner.name, levelBefore: allyGain.before.level, levelAfter: allyGain.after.level },
-      })
-      setScreen('loot')
-    } else if (result === 'win' && floor != null) {
+    if (result === 'win' && floor != null) {
       const boss = isBossFloor(floor)
       // ドロップ：欠片は必ず、装備は雑魚だとたまに・ボスは確定
       // スキルの書は、装備より低い確率でたまに落ちる（その階の敵の属性のスキル）
@@ -129,8 +115,10 @@ export default function App() {
       const allyGain = partner ? monsterBox.gainExp(partner.id, exp) : null
       setRunHp(hpLeft)
       setRunAllyHp(allyHpLeft)
+      // 倒した敵がたまに起き上がって仲間になりたそうにする（ボスは無し）。連れていくかはリザルト画面で選ぶ
+      const joinOffer = rollJoin(defeatedEnemy) ? createMonsterFromEnemy(defeatedEnemy) : null
       setLastResult({
-        floor, item, shards, book, exp, levelBefore: before.level, levelAfter: after.level,
+        floor, item, shards, book, exp, joinOffer, joinState: joinOffer ? 'offer' : null, levelBefore: before.level, levelAfter: after.level,
         ally: allyGain && { name: partner.name, levelBefore: allyGain.before.level, levelAfter: allyGain.after.level },
       })
       setScreen('loot')
@@ -142,6 +130,16 @@ export default function App() {
   }
 
   // リザルトから次の階へ
+  // 起き上がった敵を仲間にするか（はい＝仲間に加える／いいえ＝見送る）
+  const answerJoin = (accept) => {
+    if (!lastResult?.joinOffer || lastResult.joinState !== 'offer') return
+    if (accept) {
+      if (monsterBox.isFull) return
+      monsterBox.addMonster(lastResult.joinOffer)
+    }
+    setLastResult({ ...lastResult, joinState: accept ? 'joined' : 'declined' })
+  }
+
   const nextFloor = () => {
     dungeon.advanceFloor()
     setScreen('dungeon')
@@ -234,7 +232,6 @@ export default function App() {
           <BattleScreen
             battle={battle}
             setBattle={setBattle}
-            monsterBoxFull={monsterBox.isFull}
             onExit={exitBattle}
             onOpenDictionary={() => setShowDictionary(true)}
           />
@@ -246,6 +243,8 @@ export default function App() {
             maxHp={currentMaxHp}
             allyStatus={allyStatus}
             jobName={JOBS[jobId].name}
+            boxFull={monsterBox.isFull}
+            onJoinAnswer={answerJoin}
             onNext={nextFloor}
             onLobby={toLobby}
             onOpenDictionary={() => setShowDictionary(true)}

@@ -12,30 +12,51 @@ import { ALL_SKILLS_BY_ID } from '../../data/skills_elemental.js'
 
 const SLOT_LABELS = { weapon: '武器', armor: '防具', accessory: 'アクセサリー' }
 
-export default function LootResultScreen({ result, jobName, hp = null, maxHp = null, allyStatus = null, onNext, onLobby, onOpenDictionary }) {
-  // recruited：勧誘で仲間にしたモンスター（その場合は敵を倒していないのでドロップ＝item・shardsは無い）
+export default function LootResultScreen({ result, jobName, hp = null, maxHp = null, allyStatus = null, boxFull = false, onJoinAnswer, onNext, onLobby, onOpenDictionary }) {
+  // joinOffer：倒したあと起き上がって仲間になりたそうにしているモンスター（居なければnull）
+  // joinState：'offer'（返事待ち）｜'joined'（仲間にした）｜'declined'（見送った）
   // ally：連れている仲間の経験値結果 {name, levelBefore, levelAfter}（連れていなければnull）
   // book：スキルの書が落ちた時のスキルID（落ちていなければnull）
-  const { floor, item, shards, exp, levelBefore, levelAfter, recruited = null, ally = null, book = null } = result
+  const { floor, item, shards, exp, levelBefore, levelAfter, joinOffer = null, joinState = null, ally = null, book = null } = result
   const rarity = item ? RARITIES[item.rarity] : null
   const leveledUp = levelAfter > levelBefore
 
   return (
     <div className="loot-screen">
-      <div className="loot-banner">{recruited ? '🤝 仲間になった！' : '🎉 勝利！'}</div>
+      <div className="loot-banner">🎉 勝利！</div>
 
-      {recruited && (
-        <div className="monster-card recruited">
-          <div className="monster-sprite">
-            <PixelSprite enemyDef={{ isBoss: recruited.isBoss, sprite: recruited.sprite }} element={recruited.element} size={72} />
+      {joinOffer && (
+        <div className={`join-offer ${joinState}`}>
+          <div className="join-msg">
+            {joinState === 'offer' && `なんと ${joinOffer.name} が起き上がり、仲間になりたそうにこちらを見ている！`}
+            {joinState === 'joined' && `🤝 ${joinOffer.name} が仲間になった！`}
+            {joinState === 'declined' && `${joinOffer.name} は寂しそうに去っていった…`}
           </div>
-          <div className="monster-info">
-            <div className="monster-name">{recruited.name}</div>
-            <div className="weapon-meta">{getElementDef(recruited.element).icon}{getElementLabel(recruited.element)}</div>
-            <div className="weapon-meta">
-              HP{recruited.stats.hp}／ATK{recruited.stats.atk}／DEF{recruited.stats.def}／SPD{recruited.stats.spd}
+          <div className="monster-card recruited">
+            <div className="monster-sprite">
+              <PixelSprite enemyDef={{ isBoss: joinOffer.isBoss, sprite: joinOffer.sprite }} element={joinOffer.element} size={72} />
+            </div>
+            <div className="monster-info">
+              <div className="monster-name">{joinOffer.name}</div>
+              <div className="weapon-meta">{getElementDef(joinOffer.element).icon}{getElementLabel(joinOffer.element)}</div>
+              <div className="weapon-meta">
+                HP{joinOffer.stats.hp}／ATK{joinOffer.stats.atk}／DEF{joinOffer.stats.def}／SPD{joinOffer.stats.spd}
+              </div>
             </div>
           </div>
+          {joinState === 'offer' && (
+            <>
+              <div className="join-actions">
+                <button className="start-btn" disabled={boxFull} onClick={() => onJoinAnswer?.(true)}>仲間にする</button>
+                <button className="back-btn" onClick={() => onJoinAnswer?.(false)}>見送る</button>
+              </div>
+              <div className="equip-hint">
+                {boxFull
+                  ? '仲間が満員で連れていけない（拠点の「仲間」で別れると空きができる）'
+                  : '返事をせずに先へ進むと、見送ったことになる'}
+              </div>
+            </>
+          )}
         </div>
       )}
 
@@ -117,8 +138,6 @@ export default function LootResultScreen({ result, jobName, hp = null, maxHp = n
             <EnchantChipList enchants={item.enchants} />
           </div>
         </>
-      ) : recruited ? (
-        <div className="equip-hint loot-no-equip">仲間にしたので、ドロップ（欠片・装備）は無い。拠点の「仲間」で確認できる</div>
       ) : (
         <div className="equip-hint loot-no-equip">装備は落ちなかった（ボスは必ず装備を落とす）</div>
       )}

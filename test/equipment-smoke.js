@@ -25,10 +25,11 @@ import { SKILLS_NORMAL } from '../src/data/skills_normal.js'
 import { SKILLS_ELEMENTAL } from '../src/data/skills_elemental.js'
 import { applyJobExp, expToNextLevel, enemyExpFor, shardTierForFloor } from '../src/systems/progressState.js'
 import { migrateItems } from '../src/systems/inventoryState.js'
-import { createBattle, beginRound, stepBattle, getRecruitChance } from '../src/systems/battleEngine.js'
+import { createBattle, beginRound, stepBattle } from '../src/systems/battleEngine.js'
 import { generateEnemy } from '../src/systems/enemyGenerator.js'
 import {
   createMonsterFromEnemy, migrateMonsters, calcMonsterStats, buildAllyForBattle, applyMonsterExp, MONSTER_BOX_MAX,
+  rollJoin,
 } from '../src/systems/monsterState.js'
 import { ENEMY_SPECIES_BY_BLOCK, SPECIES_SPRITES, getSpeciesForFloor } from '../src/data/enemySpecies.js'
 import { ENEMY_SPRITES, resolveSpriteKey } from '../src/data/enemySprites.js'
@@ -441,52 +442,33 @@ console.log('\n【9】合成')
 // ============================================================
 // 10. 仲間にする（戦闘中の勧誘）
 // ============================================================
-console.log('\n【10】仲間にする')
+console.log('\n【10】倒すと起き上がって仲間になる')
 {
   const weapon = { id: 'w', slot: 'weapon', weaponType: 'sword', element: null, atk: 10, skills: [], enchants: [] }
-  const cfg = PROGRESSION_CONFIG.recruit
+  const cfg = PROGRESSION_CONFIG.join
   const mk = (floor, seed) => createBattle({ jobId: 'swordsman', weapon, enemyDef: generateEnemy({ floor }), seed })
   const runRound = (b, action) => { beginRound(b, action); let g = 0; while (b.phase === 'acting' && g++ < 50) stepBattle(b) }
 
-  const fresh = mk(1, 1)
-  check('敵が無傷なら成功率は最低値', Math.abs(getRecruitChance(fresh) - cfg.baseChance) < 1e-9)
-  fresh.enemy.stats.hp = Math.round(fresh.enemy.stats.maxHp / 2)
-  const half = getRecruitChance(fresh)
-  check('敵のHPを減らすほど成功率が上がる', half > cfg.baseChance && half < cfg.maxChance)
-  fresh.enemy.stats.hp = 1
-  check('瀕死ならほぼ最大値', getRecruitChance(fresh) > half && getRecruitChance(fresh) <= cfg.maxChance)
-  check('ボスは勧誘できない', getRecruitChance(mk(5, 1)) === cfg.bossChance)
+  const grunt = mk(2, 1)
+  const boss = mk(5, 1)
+  check('雑魚は乱数が確率未満なら起き上がる', rollJoin(grunt.enemy, () => cfg.gruntChance - 0.001) === true)
+  check('雑魚でも乱数が確率以上なら起き上がらない', rollJoin(grunt.enemy, () => cfg.gruntChance) === false)
+  check('ボスは絶対に起き上がらない', rollJoin(boss.enemy, () => 0) === false)
+  let hits = 0
+  let seedv = 12345
+  const rng = () => { seedv = (seedv * 1664525 + 1013904223) % 4294967296; return seedv / 4294967296 }
+  for (let i = 0; i < 20000; i++) if (rollJoin(grunt.enemy, rng)) hits++
+  check('起き上がる率が設定どおり', Math.abs(hits / 20000 - cfg.gruntChance) < 0.01, `(実際: ${(hits / 200).toFixed(1)}% 設定: ${cfg.gruntChance * 100}%)`)
 
-  // 成功するまでシードを変えて試す（瀕死にしてから勧誘）
-  let success = null, failed = null
-  for (let seed = 1; seed <= 200 && !(success && failed); seed++) {
+  // 実際に倒した敵から仲間データを作る
+  let success = null
+  for (let seed = 1; seed <= 50 && !success; seed++) {
     const b = mk(2, seed)
-    b.enemy.stats.hp = 1
-    runRound(b, { type: 'recruit' })
-    if (b.result === 'recruit' && !success) success = b
-    if (b.result !== 'recruit' && !failed) failed = b
+    let g = 0
+    while (!b.result && g++ < 200) runRound(b, { type: 'normalAttack' })
+    if (b.result === 'win') success = b
   }
-  check('勧誘に成功すると戦闘が終わる（result=recruit）', Boolean(success) && success.phase === 'ended')
-  check('成功時は敵を倒していない（HPが残っている）', success.enemy.stats.hp > 0)
-  check('成功ログが出る', success.log.some((l) => l.text.includes('仲間になった')))
-  check('失敗しても戦闘は続く（そのターンを使っただけ）',
-    Boolean(failed) && failed.log.some((l) => l.text.includes('そっぽを向いた')) && failed.result !== 'recruit')
-  check('失敗したターンも敵は行動する', failed.log.some((l) => l.text.includes(failed.enemy.name + ' の')))
-
-  const boss = mk(5, 3)
-  runRound(boss, { type: 'recruit' })
-  check('ボスへの勧誘は必ず失敗する', boss.result !== 'recruit' && boss.log.some((l) => l.text.includes('聞く耳を持たない')))
-
-  // 確率どおりに成功するか（瀕死の雑魚を1000回勧誘）
-  let wins = 0
-  for (let seed = 1; seed <= 1000; seed++) {
-    const b = mk(1, seed * 13)
-    b.enemy.stats.hp = 1
-    const expected = getRecruitChance(b)
-    runRound(b, { type: 'recruit' })
-    if (b.result === 'recruit') wins++
-    if (seed === 1000) check('成功率が設定どおり（瀕死で約6割）', Math.abs(wins / 1000 - expected) < 0.05, `(実際: ${(wins / 10).toFixed(1)}% 期待: ${(expected * 100).toFixed(1)}%)`)
-  }
+  check('倒して勝った戦闘がある', Boolean(success) && success.enemy.stats.hp <= 0)
 
   // 仲間データ
   const mon = createMonsterFromEnemy(success.enemy, { now: 1000, rand: () => 0.5 })
@@ -655,6 +637,8 @@ console.log('\n【13】モンスターの属性攻撃・攻撃演出')
   check('演出：属性スキルはその属性', resolveEffectKind({ source: 'player', weaponType: 'sword', skillElement: 'thunder' }) === 'thunder')
   check('演出：仲間の攻撃は本体の属性', resolveEffectKind({ source: 'ally', element: 'water' }) === 'water')
   check('演出：属性のない仲間は爪', resolveEffectKind({ source: 'ally', element: null }) === 'claw')
+  check('演出：敵の攻撃は本体の属性', resolveEffectKind({ source: 'enemy', element: 'fire' }) === 'fire')
+  check('演出：属性のない敵は爪', resolveEffectKind({ source: 'enemy', element: null }) === 'claw')
   check('演出：知らない武器種は汎用の打撃', resolveEffectKind({ source: 'player', weaponType: 'spear' }) === 'impact')
   check('演出：全種類のコマが作れて、マスの範囲に収まる',
     Object.keys(EFFECTS).every((k) => { const f = getEffectFrames(k); return f.length >= 5 && f.some((fr) => fr.length > 0) && f.every((fr) => fr.every((px) => px.x >= 0 && px.y >= 0 && px.x < FX_GRID && px.y < FX_GRID)) }))

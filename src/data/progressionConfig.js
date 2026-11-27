@@ -29,13 +29,11 @@ export const PROGRESSION_CONFIG = {
     expPow: 1.6,
   },
 
-  // ===== 仲間にする（戦闘中の勧誘） =====
-  // 成功率 = baseChance + (maxChance - baseChance) × (敵の減ったHPの割合)
-  // 敵のHPを減らすほど成功しやすい。ボスは勧誘できない（bossChance）
-  recruit: {
-    baseChance: 0.05,
-    maxChance: 0.6,
-    bossChance: 0,
+  // ===== 仲間になる（倒した敵がたまに起き上がる） =====
+  join: {
+    // 倒した敵が起き上がって仲間になりたそうにする確率（戦闘に勝った時に1回だけ判定）
+    gruntChance: 0.1, // 雑魚
+    bossChance: 0,    // ボスは仲間にならない
   },
 
   // ===== スキルの+値（合成のおまけ要素） =====

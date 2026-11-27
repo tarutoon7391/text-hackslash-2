@@ -407,7 +407,7 @@ button:disabled { opacity: 0.4; cursor: default; }
 }
 .action-menu {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 6px;
 }
 .cmd-btn {
@@ -1316,7 +1316,6 @@ body::after {
 
 /* ===== 仲間にする ===== */
 .cmd-sub { display: block; font-size: 9px; font-weight: normal; color: var(--muted); }
-.result-banner.recruit { background: var(--bg); color: #ff66cc; text-shadow: 0 0 10px #ff66cc; box-shadow: 0 0 12px #ff66cc66; }
 .monster-card {
   display: flex;
   align-items: center;
@@ -1395,3 +1394,16 @@ body::after {
 .book-use-btn { flex: 0 0 auto; min-width: 92px; padding: 0 8px; font-size: 11px; }
 .book-use-btn:disabled { border-color: var(--line); color: var(--muted); }
 .book-replace { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+
+/* 倒した敵が起き上がって仲間になりたそうにしている時の枠（リザルト画面） */
+.join-offer { border: 1px solid #ff66cc; box-shadow: 0 0 12px #ff66cc55; padding: 10px; margin: 10px 0; display: flex; flex-direction: column; gap: 8px; }
+.join-offer.declined { border-color: var(--dim, #557); box-shadow: none; opacity: 0.6; }
+.join-msg { color: #ff66cc; text-shadow: 0 0 8px #ff66cc88; font-weight: bold; text-align: center; line-height: 1.5; }
+.join-offer.declined .join-msg { color: inherit; text-shadow: none; }
+.join-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+
+/* 敵の攻撃演出：受けた味方（自分・仲間）の名前の上に重ねる */
+.player-name { position: relative; }
+.name-fx { position: absolute; left: 50%; top: 50%; width: 64px; height: 64px; transform: translate(-50%, -50%); pointer-events: none; z-index: 5; }
+.name-fx .attack-fx { width: 100%; height: 100%; }
+.join-actions button { margin: 0; width: 100%; }

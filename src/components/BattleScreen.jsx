@@ -1,13 +1,13 @@
 // 戦闘画面：1画面完結（敵情報・自HP/MP・弱体効果アイコン・コマンド4ボタン・直近ログ）
 // - 行動はSPD順に1体ずつ処理し、行動中のキャラを緑の蛍光ハイライトで表示
 // - 被弾したキャラのパネルはシェイクアニメーション
-// - コマンドは「こうげき／スキル／仲間にする／逃げる」の4択フロー
+// - コマンドは「こうげき／スキル／逃げる」の3択フロー
 import { useRef, useState } from 'react'
 import { ELEMENTS, getElementDef } from '../data/elements.js'
 import { ENEMIES } from '../data/enemies.js'
 import { STATUS_EFFECTS } from '../data/statusEffects.js'
 import {
-  beginRound, stepBattle, peekNextActor, escapeBattle, getRecruitChance,
+  beginRound, stepBattle, peekNextActor, escapeBattle,
   getActionList, getManualTargetCandidates, statLabel,
 } from '../systems/battleEngine.js'
 import ActionMenu from './battle/ActionMenu.jsx'
@@ -80,12 +80,12 @@ function EffectIcons({ combatant, onAilmentTap }) {
   return <div className="effect-row">{items}</div>
 }
 
-export default function BattleScreen({ battle, setBattle, onExit, onOpenDictionary, monsterBoxFull = false }) {
+export default function BattleScreen({ battle, setBattle, onExit, onOpenDictionary }) {
   const [showLog, setShowLog] = useState(false)
   const [uiMode, setUiMode] = useState('menu')          // 'menu' | 'skillList'
   const [selectedSkillId, setSelectedSkillId] = useState(null) // 白枠選択中のスキル
   const [popupEntry, setPopupEntry] = useState(null)     // スキル詳細ポップアップ
-  const [targeting, setTargeting] = useState(null)       // {kind:'attack'|'recruit'|'skill'|'skillAlly', entry?}
+  const [targeting, setTargeting] = useState(null)       // {kind:'attack'|'skill'|'skillAlly', entry?}
   const [effectPick, setEffectPick] = useState(null)     // 弱体効果の手動選択 {entry, candidates}
   const [busy, setBusy] = useState(false)                // 行動処理中（アニメーション中）
   const [activeActor, setActiveActor] = useState(null)   // 行動中ハイライト対象
@@ -98,6 +98,24 @@ export default function BattleScreen({ battle, setBattle, onExit, onOpenDictiona
     setEnemyFx((cur) => [...cur, ...list.map((fx, i) => ({ ...fx, id: ++fxSeq.current, delay: i * 140 }))])
   }
   const removeEnemyFx = (id) => setEnemyFx((cur) => cur.filter((fx) => fx.id !== id))
+  // 敵の攻撃を受けた時に、味方（自分・仲間）の名前の上で再生する攻撃演出。target＝'player' | 'ally'
+  const [partyFx, setPartyFx] = useState([])
+  const showPartyFx = (list) => {
+    if (list.length === 0) return
+    setPartyFx((cur) => [...cur, ...list.map((fx, i) => ({ ...fx, id: ++fxSeq.current, delay: i * 140 }))])
+  }
+  const removePartyFx = (id) => setPartyFx((cur) => cur.filter((fx) => fx.id !== id))
+  const renderPartyFx = (target) => {
+    const list = partyFx.filter((fx) => fx.target === target)
+    if (list.length === 0) return null
+    return (
+      <span className="name-fx">
+        {list.map((fx) => (
+          <AttackEffect key={fx.id} kind={fx.kind} color={fx.color} delay={fx.delay} onDone={() => removePartyFx(fx.id)} />
+        ))}
+      </span>
+    )
+  }
 
   // 敵の上に浮かぶダメージ数字・miss表記（出してから約0.9秒で消す）
   const [enemyPops, setEnemyPops] = useState([])
@@ -181,12 +199,20 @@ export default function BattleScreen({ battle, setBattle, onExit, onOpenDictiona
             color: ev.element ? ELEMENT_COLORS[ev.element] : '#e8ecf4',
           }))
       )
+      // 敵の攻撃が当たった時は、受けた味方（自分・仲間）の名前の上に演出を出す
+      showPartyFx(
+        uiEvents
+          .filter((ev) => ev.type === 'damage' && ev.source === 'enemy' && (ev.target === 'player' || ev.target === 'ally'))
+          .map((ev) => ({
+            target: ev.target,
+            kind: resolveEffectKind({ source: ev.source, skillElement: ev.skillElement, element: ev.element }),
+            color: ev.element ? ELEMENT_COLORS[ev.element] : '#e8ecf4',
+          }))
+      )
       // 攻撃以外で減ったHP（火傷などの継続ダメージ・混乱の自傷）も数字で出す
       const attackTotal = uiEvents
         .filter((ev) => ev.target === 'enemy' && ev.type === 'damage')
         .reduce((sum, ev) => sum + ev.amount, 0)
-      // 勧誘に失敗した時は敵の上に「…」を出す（成功時は結果バナーが出る）
-      if (uiEvents.some((ev) => ev.type === 'recruit' && !ev.success)) enemyPops.push({ text: '…', kind: 'miss' })
       const otherLoss = before.enemy - battle.enemy.stats.hp - attackTotal
       if (otherLoss > 0) enemyPops.push({ text: String(otherLoss), kind: 'damage' })
       showEnemyPops(enemyPops)
@@ -266,9 +292,6 @@ export default function BattleScreen({ battle, setBattle, onExit, onOpenDictiona
   const executeTargetedAction = (kind, entry) => {
     if (kind === 'attack') {
       runAction({ type: 'normalAttack' })
-    } else if (kind === 'recruit') {
-      // 仲間にする（勧誘）：そのターンの行動を使って勧誘する。成功すれば戦闘終了
-      runAction({ type: 'recruit' })
     } else {
       confirmSkillTarget(entry)
     }
@@ -324,7 +347,7 @@ export default function BattleScreen({ battle, setBattle, onExit, onOpenDictiona
     })
   }
 
-  const enemyTargetable = targeting && ['attack', 'recruit', 'skill'].includes(targeting.kind)
+  const enemyTargetable = targeting && ['attack', 'skill'].includes(targeting.kind)
   const playerTargetable = targeting?.kind === 'skillAlly'
   const recentLog = battle.log.slice(-5)
 
@@ -398,6 +421,7 @@ export default function BattleScreen({ battle, setBattle, onExit, onOpenDictiona
               {p.name}
             </span>
             <span className="turn-label">ターン{battle.turn}</span>
+            {renderPartyFx('player')}
           </div>
           <Bar label="HP" value={p.stats.hp} max={p.stats.maxHp} color="#4caf7d" />
           <Bar label="MP" value={p.stats.mp} max={p.stats.maxMp} color="#4a90d9" />
@@ -413,6 +437,7 @@ export default function BattleScreen({ battle, setBattle, onExit, onOpenDictiona
             <span className="ally-name-text elem-name" style={elemNameStyle(a.element)} onClick={(ev) => onElemChipTap(ev, a.element)}>
               {a.name}
             </span>
+            {renderPartyFx('ally')}
           </div>
           <Bar label="HP" value={a.stats.hp} max={a.stats.maxHp} color="#4caf7d" />
           <div className="ally-sub">
@@ -462,11 +487,8 @@ export default function BattleScreen({ battle, setBattle, onExit, onOpenDictiona
           {targeting && <TargetSelector onCancel={() => setTargeting(null)} />}
           <ActionMenu
             disabled={busy || Boolean(targeting)}
-            recruitChance={getRecruitChance(battle)}
-            boxFull={monsterBoxFull}
             onAttack={() => { resetSelection(); startTargeting('attack') }}
             onSkills={() => { setUiMode(uiMode === 'skillList' ? 'menu' : 'skillList'); setSelectedSkillId(null) }}
-            onRecruit={() => { resetSelection(); startTargeting('recruit') }}
             onEscape={onEscape}
           />
         </div>
@@ -477,14 +499,13 @@ export default function BattleScreen({ battle, setBattle, onExit, onOpenDictiona
         <div className="result-area">
           <div className={`result-banner ${battle.result}`}>
             {battle.result === 'win' && '🎉 勝利！'}
-            {battle.result === 'recruit' && '🤝 仲間になった！'}
             {battle.result === 'lose' && '💀 敗北…'}
             {battle.result === 'escape' && '🏃 逃げ出した'}
             {battle.result === 'draw' && '⏱️ 引き分け'}
           </div>
           {/* 勝利ならドロップ結果へ、それ以外はロビーへ（遷移先の判断はApp側） */}
           <button className="start-btn" onClick={onExit}>
-            {battle.result === 'win' || battle.result === 'recruit' ? 'けっかへ' : 'ロビーに戻る'}
+            {battle.result === 'win' ? 'けっかへ' : 'ロビーに戻る'}
           </button>
         </div>
       )}

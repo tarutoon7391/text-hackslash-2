@@ -1,5 +1,5 @@
 // 仲間モンスターの管理
-// - 戦闘中の勧誘で仲間にしたモンスターを最大10体まで持てる
+// - 倒したあと起き上がって仲間になったモンスターを最大10体まで持てる
 // - そのうち1体を「連れていく仲間」に選ぶと、戦闘でプレイヤーと一緒に戦う（自動で通常攻撃）
 // - 連れていった仲間は経験値をもらってレベルが上がる
 // 端末内（localStorage）に自動保存する
@@ -11,6 +11,14 @@ export const MONSTER_BOX_MAX = PROGRESSION_CONFIG.monster.maxBox
 
 // 戦闘中の敵（battle.enemy）から、仲間として保存する情報を作る（純関数）
 // 戦闘で減ったHPではなく、その敵の本来のステータス（最大HP）を記録する
+// 倒した敵が起き上がって仲間になりたそうにするかの判定（戦闘に勝った時に1回だけ呼ぶ）
+// ボスは仲間にならない。rng は 0〜1 の乱数関数
+export function rollJoin(enemy, rng = Math.random) {
+  const { gruntChance, bossChance } = PROGRESSION_CONFIG.join
+  const chance = enemy?.enemyDef?.isBoss ? bossChance : gruntChance
+  return chance > 0 && rng() < chance
+}
+
 export function createMonsterFromEnemy(enemy, { now = Date.now(), rand = Math.random } = {}) {
   const def = enemy.enemyDef || {}
   return {
