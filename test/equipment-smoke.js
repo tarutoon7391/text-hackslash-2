@@ -16,8 +16,9 @@ import {
 import { buildPlayerStats, computeStats, getEffectivePlus, getItemStats } from '../src/systems/playerStats.js'
 import {
   fuse, addPlusExp, expToNextPlus, totalInvestedExp, shardExp, equipMaterialExp,
-  buildSkillPool, buildEnchantPool, skillInheritBlockReason,
+  buildSkillPool, buildEnchantPool, skillInheritBlockReason, skillPlusChance, countSkillDuplicates,
 } from '../src/systems/fusionSystem.js'
+import { getSkillMpCost } from '../src/systems/battleEngine.js'
 import { SKILLS_NORMAL } from '../src/data/skills_normal.js'
 import { SKILLS_ELEMENTAL } from '../src/data/skills_elemental.js'
 import { applyJobExp, expToNextLevel, enemyExpFor, shardTierForFloor } from '../src/systems/progressState.js'
@@ -655,6 +656,58 @@ console.log('\n【13】モンスターの属性攻撃・攻撃演出')
   check('演出：知らない武器種は汎用の打撃', resolveEffectKind({ source: 'player', weaponType: 'spear' }) === 'impact')
   check('演出：全種類のコマが作れて、マスの範囲に収まる',
     Object.keys(EFFECTS).every((k) => { const f = getEffectFrames(k); return f.length >= 5 && f.some((fr) => fr.length > 0) && f.every((fr) => fr.every((px) => px.x >= 0 && px.y >= 0 && px.x < FX_GRID && px.y < FX_GRID)) }))
+}
+
+// ============================================================
+// 14. 合成でスキルに+値が付く（おまけ要素）
+// ============================================================
+console.log('\n【14】スキルの+値')
+{
+  const cfg = PROGRESSION_CONFIG.skillPlus
+  const sw = SKILLS_NORMAL.filter((sk) => sk.weaponType === 'sword')
+  const A = sw[0].id, B = sw[1].id
+  const mkW = (id, skills, rarity = 'epic') => ({ id, slot: 'weapon', weaponType: 'sword', rarity, name: id, atk: 10, floor: 1, skills, enchants: [] })
+  const base = mkW('b', [{ skillId: A, plus: 0 }])
+  const same = mkW('p1', [{ skillId: A, plus: 0 }])
+  const same2 = mkW('p2', [{ skillId: A, plus: 0 }])
+  const other = mkW('p3', [{ skillId: B, plus: 0 }])
+  const always = () => 0, never = () => 0.999999
+
+  check('+値が高いほど上がる確率が下がる',
+    skillPlusChance(0) === cfg.baseChance && skillPlusChance(1) < skillPlusChance(0) && skillPlusChance(3) < skillPlusChance(2))
+  check('どんどん下がる（+3で最初の4分の1以下）', skillPlusChance(3) < skillPlusChance(0) / 4)
+  check('上限に達したら上がらない', skillPlusChance(cfg.max) === 0)
+
+  const up = fuse({ base, parents: [same], rng: always })
+  check('同じスキルを持つ親を合成すると+値が付くことがある',
+    !up.error && up.item.skills[0].plus === 1 && up.skillUps.length === 1 && up.skillUps[0].from === 0 && up.skillUps[0].to === 1 && up.skillRolls === 1)
+  const miss = fuse({ base, parents: [same], rng: never })
+  check('外れたら+値は付かない（合成そのものは成功）', !miss.error && miss.item.skills[0].plus === 0 && miss.skillUps.length === 0 && miss.skillRolls === 1)
+  check('同じスキルが無ければ抽選しない', fuse({ base, parents: [other], rng: always }).skillRolls === 0)
+  check('欠片だけの合成では抽選しない', fuse({ base, shardsUsed: { 1: 2 }, rng: always }).skillRolls === 0)
+  const two = fuse({ base, parents: [same, same2], rng: always })
+  check('同じスキルの親が2つなら2回抽選（最大+2）', two.skillRolls === 2 && two.item.skills[0].plus === 2)
+  // 親の方を残した時は、消えるベース側のスキルが抽選の素になる
+  const keepParent = fuse({ base, parents: [mkW('p4', [{ skillId: A, plus: 2 }])], keepSkillKeys: ['p4:s0'], rng: always })
+  check('親の+値つきスキルを残しても抽選される（+2→+3）', keepParent.item.skills[0].plus === 3 && keepParent.skillUps[0].from === 2)
+  const capped = fuse({ base: mkW('c', [{ skillId: A, plus: cfg.max }]), parents: [same], rng: always })
+  check('上限のスキルは抽選しない', capped.skillRolls === 0 && capped.item.skills[0].plus === cfg.max)
+  check('元のベースを書き換えない', base.skills[0].plus === 0)
+
+  // 実際の確率（+0のスキルに2000回）
+  let hits = 0, seed = 12345
+  const rnd = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff }
+  for (let i = 0; i < 2000; i++) if (fuse({ base, parents: [same], rng: rnd }).skillUps.length) hits++
+  check('+0→+1は設定どおりの確率（約25%）', Math.abs(hits / 2000 - cfg.baseChance) < 0.03, `(実際: ${(hits / 20).toFixed(1)}%)`)
+
+  const pool = buildSkillPool(base, [same, other])
+  check('同じスキルの個数を数えられる（表示用）', countSkillDuplicates(pool, [pool[0]])[pool[0].key] === 1 && countSkillDuplicates(pool, [pool[2]])[pool[2].key] === 0)
+
+  // +値の効果はおまけ程度（威力+3%・消費MPは少し減る）
+  const mpSkill = SKILLS_NORMAL.find((sk) => sk.mp >= 10) || sw[0]
+  check('+値で消費MPが少しだけ減る（+5でも1割以内）',
+    getSkillMpCost({ skillId: mpSkill.id, plus: 5 }) <= getSkillMpCost({ skillId: mpSkill.id, plus: 0 }) &&
+    getSkillMpCost({ skillId: mpSkill.id, plus: 5 }) >= Math.floor(mpSkill.mp * 0.9))
 }
 
 // ============================================================

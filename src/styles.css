@@ -1382,3 +1382,6 @@ body::after {
   image-rendering: pixelated;
   filter: drop-shadow(0 0 3px #ffffffaa);
 }
+
+/* 合成：スキルの+値チャンス表示 */
+.keep-chip small.skill-plus-chance { color: var(--accent); }

@@ -133,11 +133,35 @@ export function validateEnchantSelection(base, selected) {
   return null
 }
 
+// ===== スキルの+値（合成のおまけ） =====
+// 残すスキルと同じスキルを、素材として消える側（親装備。親の方を残すならベース）も持っていると、
+// 1個につき1回抽選して、当たればそのスキルの+値が1上がる。
+// +値が高いほど当たりにくい（確率 = baseChance × decay^今の+値）
+
+// 今の+値から+1に上がる確率（0〜1）。上限に達していたら0
+export function skillPlusChance(plus) {
+  const { baseChance, decay, max } = PROGRESSION_CONFIG.skillPlus
+  if (plus >= max) return 0
+  return baseChance * Math.pow(decay, plus)
+}
+
+// 残すスキルごとの「同じスキルが素材側に何個あるか」を数える（合成画面の表示と実行の両方で使う）
+// 戻り値：{ [残すスキルのkey]: 個数 }
+export function countSkillDuplicates(skillPool, selected) {
+  const out = {}
+  for (const s of selected) {
+    out[s.key] = skillPool.filter((e) => e.skillId === s.skillId && e.key !== s.key).length
+  }
+  return out
+}
+
 // ===== 合成の実行 =====
 // base：ベース装備／parents：親にする装備（消える）／shardsUsed：{ランク: 個数}
 // keepSkillKeys／keepEnchantKeys：合成後に残すものの候補key（省略時はベースの現状維持）
-// 戻り値：{ error } または { item（合成後のベース）, gainedExp, removedIds（消える親のID） }
-export function fuse({ base, parents = [], shardsUsed = {}, keepSkillKeys = null, keepEnchantKeys = null }) {
+// rng：スキルの+値の抽選に使う乱数（テスト用に差し替え可）
+// 戻り値：{ error } または { item（合成後のベース）, gainedExp, removedIds（消える親のID）,
+//           skillUps（+値が上がったスキル [{skillId, from, to}]）, skillRolls（抽選した回数） }
+export function fuse({ base, parents = [], shardsUsed = {}, keepSkillKeys = null, keepEnchantKeys = null, rng = Math.random }) {
   if (parents.some((p) => p.id === base.id)) return { error: 'ベース自身は素材にできない' }
   if (parents.some((p) => p.slot !== base.slot)) return { error: '同じ部位の装備しか親にできない' }
   if (new Set(parents.map((p) => p.id)).size !== parents.length) return { error: '同じ装備を2回選んでいる' }
@@ -157,11 +181,27 @@ export function fuse({ base, parents = [], shardsUsed = {}, keepSkillKeys = null
   const error = validateSkillSelection(base, skills) || validateEnchantSelection(base, enchants)
   if (error) return { error }
 
+  // スキルの+値の抽選：同じスキルが素材側に1個あるごとに1回。当たるたびに次は当たりにくくなる
+  const dupCounts = countSkillDuplicates(skillPool, skills)
+  const skillUps = []
+  let skillRolls = 0
+  const finalSkills = skills.map((s) => {
+    let plus = s.plus || 0
+    for (let i = 0; i < dupCounts[s.key]; i++) {
+      const chance = skillPlusChance(plus)
+      if (chance <= 0) break
+      skillRolls++
+      if (rng() < chance) plus++
+    }
+    if (plus > (s.plus || 0)) skillUps.push({ skillId: s.skillId, from: s.plus || 0, to: plus })
+    return { skillId: s.skillId, plus }
+  })
+
   const item = {
     ...base,
     ...addPlusExp(base, gainedExp),
-    skills: base.slot === 'weapon' ? skills.map((s) => ({ skillId: s.skillId, plus: s.plus })) : (base.skills || []),
+    skills: base.slot === 'weapon' ? finalSkills : (base.skills || []),
     enchants: enchants.map((e) => ({ enchantId: e.enchantId, name: e.name, kind: e.kind, value: e.value })),
   }
-  return { item, gainedExp, removedIds: parents.map((p) => p.id) }
+  return { item, gainedExp, removedIds: parents.map((p) => p.id), skillUps, skillRolls }
 }

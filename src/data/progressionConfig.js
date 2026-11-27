@@ -38,6 +38,16 @@ export const PROGRESSION_CONFIG = {
     bossChance: 0,
   },
 
+  // ===== スキルの+値（合成のおまけ要素） =====
+  // 合成で、残すスキルと同じスキルを素材側も持っていると、1個につき1回だけ抽選して当たれば+1される
+  // 当たる確率 = baseChance × decay^(今の+値)。+値が上がるほどどんどん当たりにくくなる
+  // +値の効果は battleConfig.plusValue（威力+3%／+1、消費MP-2%／+1）
+  skillPlus: {
+    baseChance: 0.25,
+    decay: 0.6,
+    max: 10,
+  },
+
   // ===== 仲間モンスター =====
   monster: {
     maxBox: 10,   // 持てる仲間の上限

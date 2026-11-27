@@ -9,6 +9,7 @@ import { WEAPON_TYPES } from '../data/weaponTypes.js'
 import { getElementDef, getElementLabel } from '../data/elements.js'
 import { RARITIES } from '../data/rarities.js'
 import { PROGRESSION_CONFIG } from '../data/progressionConfig.js'
+import { ALL_SKILLS_BY_ID } from '../data/skills_elemental.js'
 import { EQUIP_SLOTS } from '../systems/equipmentState.js'
 import { buildPlayerStats, getItemStats } from '../systems/playerStats.js'
 import { fuse, skillSlotCount, enchantSlotCount, expToNextPlus } from '../systems/fusionSystem.js'
@@ -89,9 +90,14 @@ export default function EquipmentScreen({
     onSpendShards(shardsUsed)
     setFusionBaseId(null)
     const before = fusionBase.plus || 0
-    showToast(result.item.plus > before
+    // スキルの+値が上がっていたら一緒に知らせる（おまけ要素）
+    const skillUpText = result.skillUps
+      .map((up) => `✨ ${ALL_SKILLS_BY_ID[up.skillId]?.name || 'スキル'} +${up.from}→+${up.to}`)
+      .join(' ')
+    const mainText = result.item.plus > before
       ? `合成成功！ +${before} → +${result.item.plus}`
-      : `合成した（合成経験値 +${result.gainedExp}）`)
+      : `合成した（合成経験値 +${result.gainedExp}）`
+    showToast(skillUpText ? `${mainText} ／ ${skillUpText}` : mainText)
   }
 
   // +値つきの表示名／+値の効果込みのステータス文字列

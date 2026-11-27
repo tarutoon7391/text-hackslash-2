@@ -14,6 +14,7 @@ import {
   addPlusExp, expToNextPlus, shardExp, equipMaterialExp,
   skillSlotCount, enchantSlotCount, buildSkillPool, buildEnchantPool,
   validateSkillSelection, validateEnchantSelection, skillInheritBlockReason,
+  skillPlusChance, countSkillDuplicates,
 } from '../../systems/fusionSystem.js'
 import { getItemStats } from '../../systems/playerStats.js'
 
@@ -45,6 +46,9 @@ export default function FusionScreen({ base, candidates, shards, jobLevel, onCon
 
   const selectedSkills = keepSkills.map((k) => skillPool.find((e) => e.key === k)).filter(Boolean)
   const selectedEnchants = keepEnchants.map((k) => enchantPool.find((e) => e.key === k)).filter(Boolean)
+
+  // ===== スキルの+値のチャンス（おまけ）：残すスキルと同じスキルが素材側に何個あるか =====
+  const skillDupCounts = countSkillDuplicates(skillPool, selectedSkills)
 
   // ===== 経験値のプレビュー =====
   const usedShardCount = Object.values(shardUse).reduce((sum, n) => sum + n, 0)
@@ -226,6 +230,12 @@ export default function FusionScreen({ base, candidates, shards, jobLevel, onCon
                   >
                     {e.blocked ? '🚫' : on ? '☑' : '☐'} {'★'.repeat(skill.star)} {skill.name}{e.plus > 0 ? `(+${e.plus})` : ''}
                     {!e.fromBase && <small> ←親{e.blocked ? `（${WEAPON_TYPES[skill.weaponType].name}用）` : ''}</small>}
+                    {/* 同じスキルが素材側にあると、+値が上がるチャンス（1個につき1回抽選） */}
+                    {on && skillDupCounts[e.key] > 0 && skillPlusChance(e.plus) > 0 && (
+                      <small className="skill-plus-chance">
+                        {' '}✨+1チャンス {Math.round(skillPlusChance(e.plus) * 100)}%{skillDupCounts[e.key] > 1 ? `×${skillDupCounts[e.key]}回` : ''}
+                      </small>
+                    )}
                   </button>
                 )
               })}
@@ -255,7 +265,7 @@ export default function FusionScreen({ base, candidates, shards, jobLevel, onCon
         {notice && <div className="depart-note">{notice}</div>}
         <div className="equip-hint">
           チェックを付けたものが合成後に残る。外したものは消える
-          {base.slot === 'weapon' && `。スキルは同じ武器種（${WEAPON_TYPES[base.weaponType].name}）用と属性スキルだけ引き継げる`}
+          {base.slot === 'weapon' && `。スキルは同じ武器種（${WEAPON_TYPES[base.weaponType].name}）用と属性スキルだけ引き継げる。残すスキルと同じスキルを親も持っていると、たまにそのスキルに+値が付く（+値が高いほど付きにくい）`}
         </div>
 
         {/* 実行（押し間違い防止に2段階） */}
