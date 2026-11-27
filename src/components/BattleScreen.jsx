@@ -12,6 +12,8 @@ import {
 } from '../systems/battleEngine.js'
 import ActionMenu from './battle/ActionMenu.jsx'
 import PixelSprite from './battle/PixelSprite.jsx'
+import AttackEffect from './battle/AttackEffect.jsx'
+import { resolveEffectKind } from '../data/attackEffects.js'
 import SkillDetailPopup from './battle/SkillDetailPopup.jsx'
 import TargetSelector from './battle/TargetSelector.jsx'
 import StatusEffectShake from './battle/StatusEffectShake.jsx'
@@ -88,6 +90,15 @@ export default function BattleScreen({ battle, setBattle, onExit, onOpenDictiona
   const [busy, setBusy] = useState(false)                // 行動処理中（アニメーション中）
   const [activeActor, setActiveActor] = useState(null)   // 行動中ハイライト対象
   const [shakes, setShakes] = useState({ player: false, enemy: false })
+  // 敵のドット絵の上で再生中の攻撃演出（再生が終わったものは自分で一覧から抜ける）
+  const [enemyFx, setEnemyFx] = useState([])
+  const fxSeq = useRef(0)
+  const showEnemyFx = (list) => {
+    if (list.length === 0) return
+    setEnemyFx((cur) => [...cur, ...list.map((fx, i) => ({ ...fx, id: ++fxSeq.current, delay: i * 140 }))])
+  }
+  const removeEnemyFx = (id) => setEnemyFx((cur) => cur.filter((fx) => fx.id !== id))
+
   // 敵の上に浮かぶダメージ数字・miss表記（出してから約0.9秒で消す）
   const [enemyPops, setEnemyPops] = useState([])
   const popSeq = useRef(0)
@@ -160,6 +171,16 @@ export default function BattleScreen({ battle, setBattle, onExit, onOpenDictiona
               // 弱点＝大きく太く／耐性＝小さく
               eff: ev.elemMult > 1 ? 'weak' : ev.elemMult < 1 ? 'resist' : null,
             }))
+      // 敵のドット絵の上に出す攻撃演出（攻撃が当たった回数ぶん。連続ヒットは少しずつずらして再生）
+      showEnemyFx(
+        uiEvents
+          .filter((ev) => ev.target === 'enemy' && ev.type === 'damage')
+          .map((ev) => ({
+            kind: resolveEffectKind({ source: ev.source, skillElement: ev.skillElement, weaponType: battle.player.weapon?.weaponType }),
+            // 演出の色：属性つきの攻撃はその属性の色、無属性は刃の色（銀）
+            color: ev.element ? ELEMENT_COLORS[ev.element] : '#e8ecf4',
+          }))
+      )
       // 攻撃以外で減ったHP（火傷などの継続ダメージ・混乱の自傷）も数字で出す
       const attackTotal = uiEvents
         .filter((ev) => ev.target === 'enemy' && ev.type === 'damage')
@@ -330,6 +351,10 @@ export default function BattleScreen({ battle, setBattle, onExit, onOpenDictiona
             {/* 被弾中（shakes.enemy）はドット絵を点滅。倒した時は消滅演出を優先 */}
             <div className={`enemy-sprite ${e.stats.hp <= 0 ? 'defeated' : shakes.enemy ? 'hit' : ''} ${enemyDef.isBoss ? 'boss' : ''}`}>
               <PixelSprite enemyDef={enemyDef} element={e.element} />
+              {/* 攻撃演出：敵の絵の上に重ねてコマ送り再生 */}
+              {enemyFx.map((fx) => (
+                <AttackEffect key={fx.id} kind={fx.kind} color={fx.color} delay={fx.delay} onDone={() => removeEnemyFx(fx.id)} />
+              ))}
             </div>
             {/* ダメージ数字／miss：敵の真上に浮かんで消える。連続ヒットは少しずつずらして出す */}
             <div className="dmg-pop-layer">
