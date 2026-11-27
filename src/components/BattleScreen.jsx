@@ -25,22 +25,8 @@ import { renderGlossaryText } from '../utils/glossaryText.js'
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
 // HP/MPバー
-// HP/MPバー
-// inline=true：ラベル・バー本体・数値を横一列に並べる（バー本体は短め）。プレイヤーと仲間のパネル用
-// inline=false：ラベルと数値を上に、バーを下に置く2段表示。敵の頭上のHPバー用
-function Bar({ label, value, max, color, inline = false }) {
+function Bar({ label, value, max, color }) {
   const pct = Math.max(0, Math.min(100, (value / max) * 100))
-  if (inline) {
-    return (
-      <div className="bar-wrap inline">
-        <span className="bar-inline-label">{label}</span>
-        <div className="bar-bg">
-          <div className="bar-fill" style={{ width: `${pct}%`, background: color }} />
-        </div>
-        <span className="bar-inline-value">{value}/{max}</span>
-      </div>
-    )
-  }
   return (
     <div className="bar-wrap">
       <div className="bar-label">
@@ -367,7 +353,9 @@ export default function BattleScreen({ battle, setBattle, onExit, onOpenDictiona
         <div className="log-hint">▸</div>
       </div>
 
-      {/* 自分の情報 */}
+      {/* 自分と仲間の情報：仲間がいる時は左右に並べる（パネルが半分幅になるぶんバーも短くなる）。
+          仲間がいない時は自分のパネルが横いっぱい */}
+      <div className={`party-panels ${a ? 'with-ally' : ''}`}>
       <div
         className={`player-panel panel ${activeActor === 'player' ? 'acting' : ''} ${playerTargetable ? 'targetable' : ''} ${shakes.player ? 'shake' : ''}`}
         onClick={onPlayerTap}
@@ -381,11 +369,8 @@ export default function BattleScreen({ battle, setBattle, onExit, onOpenDictiona
             </span>
             <span className="turn-label">ターン{battle.turn}</span>
           </div>
-          {/* HPとMPは横並び（1行に収める） */}
-          <div className="stat-bars">
-            <Bar inline label="HP" value={p.stats.hp} max={p.stats.maxHp} color="#4caf7d" />
-            <Bar inline label="MP" value={p.stats.mp} max={p.stats.maxMp} color="#4a90d9" />
-          </div>
+          <Bar label="HP" value={p.stats.hp} max={p.stats.maxHp} color="#4caf7d" />
+          <Bar label="MP" value={p.stats.mp} max={p.stats.maxMp} color="#4a90d9" />
           <EffectIcons combatant={p} onAilmentTap={onAilmentTap} />
         </StatusEffectShake>
       </div>
@@ -393,23 +378,19 @@ export default function BattleScreen({ battle, setBattle, onExit, onOpenDictiona
       {/* 一緒に戦う仲間（自動で攻撃する。倒れても戦闘は続く） */}
       {a && (
         <div className={`ally-panel panel ${activeActor === 'ally' ? 'acting' : ''} ${a.stats.hp <= 0 ? 'down' : ''}`}>
-          <div className="ally-sprite">
-            <PixelSprite enemyDef={{ isBoss: a.allyDef.isBoss, sprite: a.allyDef.sprite }} element={a.element} size={36} />
+          <div className="player-name ally-name">
+            <PixelSprite enemyDef={{ isBoss: a.allyDef.isBoss, sprite: a.allyDef.sprite }} element={a.element} size={20} />
+            <span className="ally-name-text">{a.name}</span>
           </div>
-          <div className="ally-info">
-            {/* 名前とHPバーを横並び（1行に収める） */}
-            <div className="ally-line">
-              <span className="ally-name">
-                {a.name}
-                <span className="elem-chip">{getElementDef(a.element).icon}{getElementDef(a.element).name}</span>
-                {a.stats.hp <= 0 && <span className="ally-down-label">戦闘不能</span>}
-              </span>
-              <Bar inline label="HP" value={a.stats.hp} max={a.stats.maxHp} color="#4caf7d" />
-            </div>
-            <EffectIcons combatant={a} onAilmentTap={onAilmentTap} />
+          <Bar label="HP" value={a.stats.hp} max={a.stats.maxHp} color="#4caf7d" />
+          <div className="ally-sub">
+            <span className="elem-chip">{getElementDef(a.element).icon}{getElementDef(a.element).name}</span>
+            {a.stats.hp <= 0 ? <span className="ally-down-label">戦闘不能</span> : <span>自動で攻撃</span>}
           </div>
+          <EffectIcons combatant={a} onAilmentTap={onAilmentTap} />
         </div>
       )}
+      </div>
 
       {/* 追加ターン表示 */}
       {extraTurn && !busy && <div className="extra-banner">⚡ 追加ターン！</div>}

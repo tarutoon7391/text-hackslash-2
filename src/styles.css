@@ -1335,10 +1335,7 @@ body::after {
 .quick-equip-btn.release-yes { border-color: var(--danger); color: var(--danger); }
 
 /* ===== 一緒に戦う仲間 ===== */
-.ally-panel { display: flex; align-items: center; gap: 8px; padding: 6px 10px; }
 .ally-panel.down { opacity: 0.45; }
-.ally-sprite { line-height: 0; flex-shrink: 0; }
-.ally-info { flex: 1; min-width: 0; }
 .ally-hp-label { margin-top: 6px; }
 .monster-actions { display: flex; flex-direction: column; gap: 4px; }
 .monster-actions .quick-equip-btn { flex: 0 0 auto; min-height: 36px; padding: 0 10px; font-size: 11px; }
@@ -1357,14 +1354,14 @@ body::after {
 }
 .party-row .party-sub { color: var(--muted); font-size: 11px; }
 
-/* ===== HP/MPバーの横並び表示（プレイヤー・仲間のパネル） =====
-   ラベル・バー本体・数値を1行に並べる。バー本体は残り幅ぶんだけ（短め）になる */
-.stat-bars { display: flex; gap: 12px; }
-.bar-wrap.inline { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; margin-bottom: 0; }
-.bar-wrap.inline .bar-bg { flex: 1; min-width: 24px; }
-.bar-inline-label { font-size: 10px; color: var(--muted); }
-.bar-inline-value { font-size: 11px; white-space: nowrap; }
-.ally-line { display: flex; align-items: center; gap: 10px; }
-.ally-name { font-size: 13px; font-weight: bold; white-space: nowrap; display: flex; align-items: center; gap: 4px; }
-.ally-down-label { font-size: 10px; color: var(--danger); font-weight: normal; }
-.ally-panel .effect-row:empty { display: none; }
+/* ===== 自分と仲間のパネルを左右に並べる =====
+   仲間がいる時だけ2列（自分：仲間＝3：2）。パネルが狭くなるぶんHP/MPバーも短くなる。
+   HPとMPは今まで通り縦に積む。仲間がいない時は自分のパネルが横いっぱい */
+.battle > .party-panels { flex-shrink: 0; display: flex; gap: 8px; align-items: stretch; }
+.party-panels > .player-panel { flex: 3 1 0; min-width: 0; }
+.party-panels > .ally-panel { flex: 2 1 0; min-width: 0; }
+.ally-name { display: flex; align-items: center; gap: 4px; }
+.ally-name-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.ally-name .pixel-sprite { flex-shrink: 0; }
+.ally-sub { display: flex; align-items: center; justify-content: space-between; font-size: 10px; color: var(--muted); margin-top: 2px; }
+.ally-down-label { color: var(--danger); }
