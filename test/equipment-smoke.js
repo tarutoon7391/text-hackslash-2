@@ -774,6 +774,70 @@ console.log('\n【15】スキルの書')
 }
 
 // ============================================================
+// 16. よけられた攻撃では状態異常などが付かない
+// ============================================================
+console.log('\n【16】よけられたら状態異常が付かない')
+{
+  const all = [...SKILLS_NORMAL, ...SKILLS_ELEMENTAL]
+  const runRound = (b, action) => { beginRound(b, action); let g = 0; while (b.phase === 'acting' && g++ < 50) stepBattle(b) }
+  // 相手に効果をかける攻撃スキルを種類ごとに集める
+  const withEffect = (pred) => all.filter((sk) => sk.attack && sk.effects.some(pred))
+  const ailmentSkills = withEffect((e) => e.type === 'ailment' || e.type === 'randomAilment')
+  const debuffSkills = withEffect((e) => e.type === 'statMod' && e.target === 'enemy')
+  check('検証対象：状態異常つき攻撃スキルが複数ある', ailmentSkills.length >= 20, `(${ailmentSkills.length}個)`)
+
+  // 敵の回避を100%にして必ずよけさせる／0にして必ず当てる（命中判定だけ変えて、あとは同じ条件）
+  const trial = (skill, evasion, seed) => {
+    const weapon = { id: 'w', slot: 'weapon', weaponType: skill.weaponType || 'sword', element: skill.element || null, atk: 10, skills: [{ skillId: skill.id, plus: 0 }], enchants: [] }
+    const b = createBattle({ jobId: 'swordsman', weapon, enemyDef: generateEnemy({ floor: 30 }), seed })
+    b.player.stats.mp = 999; b.player.stats.maxMp = 999
+    b.enemy.stats.evasion = evasion
+    b.enemy.stats.hp = 99999; b.enemy.stats.maxHp = 99999
+    beginRound(b, { type: 'skill', skillRef: weapon.skills[0] })
+    // プレイヤーの行動だけ進める（敵の行動で状況が変わらないよう、プレイヤーが動いたら止める）
+    let g = 0, acted = false
+    while (b.phase === 'acting' && g++ < 10 && !acted) { const r = stepBattle(b); if (r.actorId === 'player') acted = true }
+    const dodged = b.log.some((l) => l.text.includes('は攻撃をかわした'))
+    const hit = b.uiEvents.some((e) => e.type === 'damage' && e.target === 'enemy')
+    return { ailments: b.enemy.ailments.length, debuffs: b.enemy.mods.filter((m) => m.amount < 0).length, dodged, hit }
+  }
+
+  let missAilments = 0, missTrials = 0, hitAilments = 0, hitTrials = 0
+  for (const skill of ailmentSkills) {
+    for (let seed = 1; seed <= 40; seed++) {
+      const m = trial(skill, 100, seed)
+      if (m.dodged && !m.hit) { missTrials++; missAilments += m.ailments }
+      const h = trial(skill, 0, seed)
+      if (h.hit) { hitTrials++; hitAilments += h.ailments > 0 ? 1 : 0 }
+    }
+  }
+  check('全部よけられた時は状態異常が1つも付かない', missTrials > 500 && missAilments === 0, `(${missTrials}回よけられて付与${missAilments}回)`)
+  check('当たった時は今まで通り状態異常が付く', hitAilments > hitTrials * 0.1, `(${hitTrials}回当たって付与${hitAilments}回)`)
+
+  let missDebuffs = 0, missD = 0, hitDebuffs = 0
+  for (const skill of debuffSkills) {
+    for (let seed = 1; seed <= 20; seed++) {
+      const m = trial(skill, 100, seed)
+      if (m.dodged && !m.hit) { missD++; missDebuffs += m.debuffs }
+      if (trial(skill, 0, seed).debuffs > 0) hitDebuffs++
+    }
+  }
+  check('全部よけられた時は弱体（デバフ）も付かない', missD > 100 && missDebuffs === 0, `(${missD}回よけられて付与${missDebuffs}回)`)
+  check('当たった時は弱体が付く', hitDebuffs > 0)
+
+  // 攻撃を伴わない補助スキル（自分へのバフなど）は影響を受けない
+  const selfBuff = all.find((sk) => !sk.attack && sk.effects.some((e) => e.type === 'statMod' && e.target === 'self'))
+  const sb = (() => {
+    const weapon = { id: 'w', slot: 'weapon', weaponType: selfBuff.weaponType || 'sword', element: null, atk: 10, skills: [{ skillId: selfBuff.id, plus: 0 }], enchants: [] }
+    const b = createBattle({ jobId: 'swordsman', weapon, enemyDef: generateEnemy({ floor: 1 }), seed: 5 })
+    b.player.stats.mp = 999; b.enemy.stats.evasion = 100
+    runRound(b, { type: 'skill', skillRef: weapon.skills[0] })
+    return b.player.mods.length
+  })()
+  check('自分にかける補助スキルは今まで通り効く', sb > 0)
+}
+
+// ============================================================
 console.log('\n============================================')
 console.log(`結果: ✅ ${passCount} / ❌ ${failCount}`)
 if (failCount > 0) process.exit(1)

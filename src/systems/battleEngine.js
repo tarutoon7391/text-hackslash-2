@@ -848,6 +848,13 @@ function applyDispels(battle, attacker, defender, skill) {
   }
 }
 
+// その効果が「相手にかける効果」か（攻撃が当たらなかった時に発動させないものの判定）
+const OPPONENT_EFFECT_TYPES = new Set(['ailment', 'randomAilment', 'ailmentStackAdd', 'amplify', 'mpDamage', 'mpDrain', 'hpDrainOnDamage'])
+function effectTargetsOpponent(eff) {
+  if (OPPONENT_EFFECT_TYPES.has(eff.type)) return true
+  return eff.type === 'statMod' && eff.target === 'enemy'
+}
+
 function applySkillEffects(battle, actor, target, skill, ctx) {
   const { anyHit, manualTargetKey, isMatch } = ctx
 
@@ -856,6 +863,9 @@ function applySkillEffects(battle, actor, target, skill, ctx) {
     if (eff.type === 'dispel' || eff.type === 'hpCost') continue
     // onHit効果は1ヒット以上当たっていないと発動しない
     if (eff.trigger === 'onHit' && skill.attack && !anyHit) continue
+    // 攻撃スキルを全部よけられた時は、相手にかける効果（状態異常・弱体・MP削りなど）は発動しない
+    // （以前は状態異常の付与に「命中した時だけ」の指定が無く、よけられても付くことがあった）
+    if (skill.attack && !anyHit && effectTargetsOpponent(eff)) continue
     // 効果ごとの条件（例：感電中の敵に命中時のみ）
     if (eff.condition && !checkCondition(battle, actor, target, eff.condition)) continue
 
