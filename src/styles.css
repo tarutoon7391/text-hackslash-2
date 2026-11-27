@@ -1355,13 +1355,15 @@ body::after {
 .party-row .party-sub { color: var(--muted); font-size: 11px; }
 
 /* ===== 自分と仲間のパネルを左右に並べる =====
-   仲間がいる時だけ2列（自分：仲間＝3：2）。パネルが狭くなるぶんHP/MPバーも短くなる。
+   仲間がいる時だけ2列（自分と仲間で幅は均等）。パネルが狭くなるぶんHP/MPバーも短くなる。
    HPとMPは今まで通り縦に積む。仲間がいない時は自分のパネルが横いっぱい */
 .battle > .party-panels { flex-shrink: 0; display: flex; gap: 8px; align-items: stretch; }
-.party-panels > .player-panel { flex: 3 1 0; min-width: 0; }
-.party-panels > .ally-panel { flex: 2 1 0; min-width: 0; }
+.party-panels > .player-panel,
+.party-panels > .ally-panel { flex: 1 1 0; min-width: 0; }
 .ally-name { display: flex; align-items: center; gap: 4px; }
 .ally-name-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
 .ally-name .pixel-sprite { flex-shrink: 0; }
 .ally-sub { display: flex; align-items: center; justify-content: space-between; font-size: 10px; color: var(--muted); margin-top: 2px; }
 .ally-down-label { color: var(--danger); }
+.elem-name { cursor: pointer; }
+.ally-sub { justify-content: flex-end; }

@@ -25,6 +25,12 @@ import { renderGlossaryText } from '../utils/glossaryText.js'
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
 // HP/MPバー
+// 名前の文字色：その属性の色にする（光って見えるよう同色の影つき）。無属性は通常の文字色のまま
+function elemNameStyle(element) {
+  if (!element || !ELEMENT_COLORS[element]) return undefined
+  return { color: ELEMENT_COLORS[element], textShadow: `0 0 6px ${ELEMENT_COLORS[element]}` }
+}
+
 function Bar({ label, value, max, color }) {
   const pct = Math.max(0, Math.min(100, (value / max) * 100))
   return (
@@ -313,9 +319,9 @@ export default function BattleScreen({ battle, setBattle, onExit, onOpenDictiona
           <div className="enemy-stage">
             <div className="enemy-hud">
               <div className="enemy-title">
-                {e.name}
-                <span className="elem-chip" onClick={(ev) => onElemChipTap(ev, e.element)}>
-                  {getElementDef(e.element).icon}{getElementDef(e.element).name}
+                {/* 属性は文字で書かず、名前の色で表す（タップでその属性の説明） */}
+                <span className="elem-name" style={elemNameStyle(e.element)} onClick={(ev) => onElemChipTap(ev, e.element)}>
+                  {e.name}
                 </span>
               </div>
               <Bar label="HP" value={e.stats.hp} max={e.stats.maxHp} color="#e05555" />
@@ -362,10 +368,9 @@ export default function BattleScreen({ battle, setBattle, onExit, onOpenDictiona
       >
         <StatusEffectShake color={seShakes.player}>
           <div className="player-name">
-            {p.name}
-            {/* 初期装備の武器は無属性（p.element=null）なので無属性対応のヘルパーで表示する */}
-            <span className="elem-chip" onClick={(ev) => onElemChipTap(ev, p.element)}>
-              {getElementDef(p.element).icon}{getElementDef(p.element).name}
+            {/* 属性は文字で書かず、名前の色で表す（無属性は通常の文字色。タップでその属性の説明） */}
+            <span className="elem-name" style={elemNameStyle(p.element)} onClick={(ev) => onElemChipTap(ev, p.element)}>
+              {p.name}
             </span>
             <span className="turn-label">ターン{battle.turn}</span>
           </div>
@@ -380,11 +385,12 @@ export default function BattleScreen({ battle, setBattle, onExit, onOpenDictiona
         <div className={`ally-panel panel ${activeActor === 'ally' ? 'acting' : ''} ${a.stats.hp <= 0 ? 'down' : ''}`}>
           <div className="player-name ally-name">
             <PixelSprite enemyDef={{ isBoss: a.allyDef.isBoss, sprite: a.allyDef.sprite }} element={a.element} size={20} />
-            <span className="ally-name-text">{a.name}</span>
+            <span className="ally-name-text elem-name" style={elemNameStyle(a.element)} onClick={(ev) => onElemChipTap(ev, a.element)}>
+              {a.name}
+            </span>
           </div>
           <Bar label="HP" value={a.stats.hp} max={a.stats.maxHp} color="#4caf7d" />
           <div className="ally-sub">
-            <span className="elem-chip">{getElementDef(a.element).icon}{getElementDef(a.element).name}</span>
             {a.stats.hp <= 0 ? <span className="ally-down-label">戦闘不能</span> : <span>自動で攻撃</span>}
           </div>
           <EffectIcons combatant={a} onAilmentTap={onAilmentTap} />
